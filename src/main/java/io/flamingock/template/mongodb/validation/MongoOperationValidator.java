@@ -17,6 +17,7 @@ package io.flamingock.template.mongodb.validation;
 
 import io.flamingock.template.mongodb.model.MongoOperation;
 import io.flamingock.template.mongodb.model.MongoOperationType;
+import io.flamingock.template.mongodb.model.MongoStep;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -413,6 +414,68 @@ public final class MongoOperationValidator {
         } else if (!(pipeline instanceof List)) {
             errors.add(new ValidationError(entityId, "CreateViewOperation",
                     "'pipeline' must be a list"));
+        }
+
+        return errors;
+    }
+
+    /**
+     * Validates a single MongoDB step.
+     *
+     * <p>Validates both the apply operation (required) and the rollback operation (optional).
+     * If rollback is present, it must be valid.</p>
+     *
+     * @param step     the step to validate
+     * @param entityId the identifier for error reporting (e.g., "changeId.steps[0]")
+     * @return list of validation errors (empty if valid)
+     */
+    public static List<ValidationError> validateStep(MongoStep step, String entityId) {
+        List<ValidationError> errors = new ArrayList<>();
+
+        if (step == null) {
+            errors.add(new ValidationError(entityId, "MongoStep", "Step cannot be null"));
+            return errors;
+        }
+
+        // Validate apply operation (required)
+        if (step.getApply() == null) {
+            errors.add(new ValidationError(entityId, "MongoStep", "Step requires an 'apply' operation"));
+        } else {
+            errors.addAll(validate(step.getApply(), entityId + ".apply"));
+        }
+
+        // Validate rollback operation (optional, but if present must be valid)
+        if (step.getRollback() != null) {
+            errors.addAll(validate(step.getRollback(), entityId + ".rollback"));
+        }
+
+        return errors;
+    }
+
+    /**
+     * Validates a list of MongoDB steps.
+     *
+     * @param steps    the list of steps to validate
+     * @param entityId the base identifier for error reporting (e.g., "changeId")
+     * @return list of validation errors (empty if all steps are valid)
+     */
+    public static List<ValidationError> validateSteps(List<MongoStep> steps, String entityId) {
+        List<ValidationError> errors = new ArrayList<>();
+
+        if (steps == null) {
+            errors.add(new ValidationError(entityId, "MongoSteps", "Steps list cannot be null"));
+            return errors;
+        }
+
+        if (steps.isEmpty()) {
+            errors.add(new ValidationError(entityId, "MongoSteps", "Steps list cannot be empty"));
+            return errors;
+        }
+
+        for (int i = 0; i < steps.size(); i++) {
+            // Use 1-based indexing for user-friendly error messages
+            String stepEntityId = entityId + ".steps[" + (i + 1) + "]";
+            errors.addAll(validateStep(steps.get(i), stepEntityId));
         }
 
         return errors;
