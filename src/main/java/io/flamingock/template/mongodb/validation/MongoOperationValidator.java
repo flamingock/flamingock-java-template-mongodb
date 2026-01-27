@@ -15,9 +15,9 @@
  */
 package io.flamingock.template.mongodb.validation;
 
+import io.flamingock.api.template.TemplateStep;
 import io.flamingock.template.mongodb.model.MongoOperation;
 import io.flamingock.template.mongodb.model.MongoOperationType;
-import io.flamingock.template.mongodb.model.MongoStep;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -429,17 +429,17 @@ public final class MongoOperationValidator {
      * @param entityId the identifier for error reporting (e.g., "changeId.steps[0]")
      * @return list of validation errors (empty if valid)
      */
-    public static List<ValidationError> validateStep(MongoStep step, String entityId) {
+    public static List<ValidationError> validateStep(TemplateStep<MongoOperation, MongoOperation> step, String entityId) {
         List<ValidationError> errors = new ArrayList<>();
 
         if (step == null) {
-            errors.add(new ValidationError(entityId, "MongoStep", "Step cannot be null"));
+            errors.add(new ValidationError(entityId, "TemplateStep", "Step cannot be null"));
             return errors;
         }
 
         // Validate apply operation (required)
         if (step.getApply() == null) {
-            errors.add(new ValidationError(entityId, "MongoStep", "Step requires an 'apply' operation"));
+            errors.add(new ValidationError(entityId, "TemplateStep", "Step requires an 'apply' operation"));
         } else {
             errors.addAll(validate(step.getApply(), entityId + ".apply"));
         }
@@ -459,16 +459,16 @@ public final class MongoOperationValidator {
      * @param entityId the base identifier for error reporting (e.g., "changeId")
      * @return list of validation errors (empty if all steps are valid)
      */
-    public static List<ValidationError> validateSteps(List<MongoStep> steps, String entityId) {
+    public static List<ValidationError> validateSteps(List<TemplateStep<MongoOperation, MongoOperation>> steps, String entityId) {
         List<ValidationError> errors = new ArrayList<>();
 
         if (steps == null) {
-            errors.add(new ValidationError(entityId, "MongoSteps", "Steps list cannot be null"));
+            errors.add(new ValidationError(entityId, "TemplateSteps", "Steps list cannot be null"));
             return errors;
         }
 
         if (steps.isEmpty()) {
-            errors.add(new ValidationError(entityId, "MongoSteps", "Steps list cannot be empty"));
+            errors.add(new ValidationError(entityId, "TemplateSteps", "Steps list cannot be empty"));
             return errors;
         }
 

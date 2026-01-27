@@ -15,7 +15,8 @@
  */
 package io.flamingock.template.mongodb.exception;
 
-import io.flamingock.template.mongodb.model.MongoStep;
+import io.flamingock.api.template.TemplateStep;
+import io.flamingock.template.mongodb.model.MongoOperation;
 
 import java.util.Collections;
 import java.util.List;
@@ -47,7 +48,7 @@ import java.util.List;
 public class MongoStepExecutionException extends RuntimeException {
 
     private final int stepNumber;
-    private final List<MongoStep> completedSteps;
+    private final List<TemplateStep<MongoOperation, MongoOperation>> completedSteps;
 
     /**
      * Creates a new step execution exception.
@@ -57,7 +58,7 @@ public class MongoStepExecutionException extends RuntimeException {
      * @param completedSteps the list of steps that completed before the failure
      * @param cause          the original exception
      */
-    public MongoStepExecutionException(String message, int stepNumber, List<MongoStep> completedSteps, Throwable cause) {
+    public MongoStepExecutionException(String message, int stepNumber, List<TemplateStep<MongoOperation, MongoOperation>> completedSteps, Throwable cause) {
         super(formatMessage(message, stepNumber), cause);
         this.stepNumber = stepNumber;
         this.completedSteps = completedSteps != null
@@ -72,7 +73,7 @@ public class MongoStepExecutionException extends RuntimeException {
      * @param stepNumber     the 1-based index of the failed step
      * @param completedSteps the list of steps that completed before the failure
      */
-    public MongoStepExecutionException(String message, int stepNumber, List<MongoStep> completedSteps) {
+    public MongoStepExecutionException(String message, int stepNumber, List<TemplateStep<MongoOperation, MongoOperation>> completedSteps) {
         this(message, stepNumber, completedSteps, null);
     }
 
@@ -90,7 +91,7 @@ public class MongoStepExecutionException extends RuntimeException {
      *
      * @return unmodifiable list of completed steps
      */
-    public List<MongoStep> getCompletedSteps() {
+    public List<TemplateStep<MongoOperation, MongoOperation>> getCompletedSteps() {
         return completedSteps;
     }
 

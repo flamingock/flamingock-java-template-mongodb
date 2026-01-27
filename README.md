@@ -33,6 +33,7 @@ A Flamingock template for declarative MongoDB database operations using YAML-bas
 
 - **Declarative YAML-based changes** — Define MongoDB operations in simple YAML files
 - **11 supported operation types** — Collections, indexes, documents, and views
+- **Steps format** — Group multiple operations with paired rollbacks for atomic changes
 - **Rollback support** — Optional rollback operations for reversible changes
 - **Transaction support** — Configurable transactional execution
 - **Java SPI integration** — Automatically discovered by Flamingock at runtime
@@ -73,8 +74,8 @@ template: MongoChangeTemplate
 targetSystem:
   id: "mongodb"
 apply:
-  - type: createCollection
-    collection: users
+  type: createCollection
+  collection: users
 ```
 
 ### 2. Insert seed data
@@ -88,43 +89,52 @@ template: MongoChangeTemplate
 targetSystem:
   id: "mongodb"
 apply:
-  - type: insert
-    collection: users
-    parameters:
-      documents:
-        - name: "Admin"
-          email: "admin@company.com"
-          roles: ["superuser"]
-        - name: "Backup"
-          email: "backup@company.com"
-          roles: ["readonly"]
+  type: insert
+  collection: users
+  parameters:
+    documents:
+      - name: "Admin"
+        email: "admin@company.com"
+        roles: ["superuser"]
+      - name: "Backup"
+        email: "backup@company.com"
+        roles: ["readonly"]
 ```
 
-### 3. Create indexes with rollback
+### 3. Multiple operations with rollback using steps
 
-**Example: `_0003__create_indexes.yaml`**
+For changes that require multiple operations with paired rollbacks, use the `steps` format:
+
+**Example: `_0003__setup_products.yaml`**
 
 ```yaml
-id: create-user-indexes
+id: setup-products
 transactional: false
 template: MongoChangeTemplate
 targetSystem:
   id: "mongodb"
-apply:
-  - type: createIndex
-    collection: users
-    parameters:
-      keys:
-        email: 1
-      options:
-        name: "email_unique_index"
-        unique: true
 
-rollback:
-  - type: dropIndex
-    collection: users
-    parameters:
-      indexName: "email_unique_index"
+steps:
+  - apply:
+      type: createCollection
+      collection: products
+    rollback:
+      type: dropCollection
+      collection: products
+
+  - apply:
+      type: createIndex
+      collection: products
+      parameters:
+        keys:
+          category: 1
+        options:
+          name: "category_index"
+    rollback:
+      type: dropIndex
+      collection: products
+      parameters:
+        indexName: "category_index"
 ```
 
 ---
@@ -149,6 +159,12 @@ rollback:
 
 ## 📄 YAML Structure
 
+The template supports two formats: **simple format** for single operations, and **steps format** for multiple operations with paired rollbacks.
+
+### Simple Format
+
+Use this format for single operations:
+
 ```yaml
 # Required: Unique identifier for this change
 id: my-change-id
@@ -166,19 +182,51 @@ template: MongoChangeTemplate
 targetSystem:
   id: "mongodb"
 
-# Required: List of operations to apply
+# Required: Single operation to apply
 apply:
-  - type: <operation-type>
-    collection: <collection-name>
-    parameters:
-      # Operation-specific parameters
+  type: <operation-type>
+  collection: <collection-name>
+  parameters:
+    # Operation-specific parameters
 
-# Optional: List of operations to rollback
+# Optional: Single rollback operation
 rollback:
-  - type: <operation-type>
-    collection: <collection-name>
-    parameters:
-      # Operation-specific parameters
+  type: <operation-type>
+  collection: <collection-name>
+  parameters:
+    # Operation-specific parameters
+```
+
+### Steps Format
+
+Use this format when you need multiple operations with paired rollbacks:
+
+```yaml
+id: my-change-id
+transactional: false
+template: MongoChangeTemplate
+targetSystem:
+  id: "mongodb"
+
+# List of steps, each with an apply and optional rollback
+steps:
+  - apply:
+      type: <operation-type>
+      collection: <collection-name>
+      parameters:
+        # Operation-specific parameters
+    rollback:
+      type: <operation-type>
+      collection: <collection-name>
+      parameters:
+        # Operation-specific parameters
+
+  - apply:
+      type: <another-operation>
+      collection: <collection-name>
+    rollback:
+      type: <rollback-operation>
+      collection: <collection-name>
 ```
 
 ---
@@ -189,87 +237,129 @@ rollback:
 
 ```yaml
 apply:
-  - type: createCollection
-    collection: products
+  type: createCollection
+  collection: products
 ```
 
 ### Create Index
 
 ```yaml
 apply:
-  - type: createIndex
-    collection: products
-    parameters:
-      keys:
-        category: 1
-        price: -1
-      options:
-        name: "category_price_index"
-        background: true
+  type: createIndex
+  collection: products
+  parameters:
+    keys:
+      category: 1
+      price: -1
+    options:
+      name: "category_price_index"
+      background: true
 ```
 
 ### Insert Documents
 
 ```yaml
 apply:
-  - type: insert
-    collection: products
-    parameters:
-      documents:
-        - name: "Widget"
-          price: 29.99
-          category: "electronics"
-        - name: "Gadget"
-          price: 49.99
-          category: "electronics"
+  type: insert
+  collection: products
+  parameters:
+    documents:
+      - name: "Widget"
+        price: 29.99
+        category: "electronics"
+      - name: "Gadget"
+        price: 49.99
+        category: "electronics"
 ```
 
 ### Update Documents
 
 ```yaml
 apply:
-  - type: update
-    collection: products
-    parameters:
-      filter:
-        category: "electronics"
-      update:
-        $set:
-          discounted: true
+  type: update
+  collection: products
+  parameters:
+    filter:
+      category: "electronics"
+    update:
+      $set:
+        discounted: true
 ```
 
 ### Delete Documents
 
 ```yaml
 apply:
-  - type: delete
-    collection: products
-    parameters:
-      filter:
-        discounted: true
+  type: delete
+  collection: products
+  parameters:
+    filter:
+      discounted: true
 ```
 
 ### Rename Collection
 
 ```yaml
 apply:
-  - type: renameCollection
-    collection: oldName
-    parameters:
-      newName: newName
+  type: renameCollection
+  collection: oldName
+  parameters:
+    newName: newName
 ```
 
 ### Create View
 
 ```yaml
 apply:
-  - type: createView
-    collection: activeUsers
-    parameters:
-      viewOn: users
-      pipeline:
-        - $match:
-            active: true
+  type: createView
+  collection: activeUsers
+  parameters:
+    viewOn: users
+    pipeline:
+      - $match:
+          active: true
+```
+
+### Multiple Operations with Steps
+
+When you need multiple operations with paired rollbacks:
+
+```yaml
+steps:
+  - apply:
+      type: createCollection
+      collection: orders
+    rollback:
+      type: dropCollection
+      collection: orders
+
+  - apply:
+      type: insert
+      collection: orders
+      parameters:
+        documents:
+          - orderId: "ORD-001"
+            status: "pending"
+    rollback:
+      type: delete
+      collection: orders
+      parameters:
+        filter: {}
+
+  - apply:
+      type: createIndex
+      collection: orders
+      parameters:
+        keys:
+          orderId: 1
+        options:
+          name: "orderId_index"
+          unique: true
+    rollback:
+      type: dropIndex
+      collection: orders
+      parameters:
+        indexName: "orderId_index"
 ```
 
 ---

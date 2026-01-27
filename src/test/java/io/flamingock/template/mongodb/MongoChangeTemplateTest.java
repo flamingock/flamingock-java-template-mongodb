@@ -21,6 +21,7 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
 import io.flamingock.api.annotations.EnableFlamingock;
+import io.flamingock.api.template.TemplateStep;
 import io.flamingock.store.mongodb.sync.MongoDBSyncAuditStore;
 import io.flamingock.internal.common.core.audit.AuditEntry;
 import io.flamingock.internal.core.builder.FlamingockFactory;
@@ -190,8 +191,8 @@ class MongoChangeTemplateTest {
     }
 
     @Test
-    @DisplayName("WHEN rollback is invoked THEN multiple rollback operations execute in defined order")
-    void rollbackWithMultipleOperations() {
+    @DisplayName("WHEN rollback is invoked THEN rollback operation executes")
+    void rollbackWithSingleOperation() {
         // First, set up the state by creating the collection and inserting data
         mongoDatabase.createCollection("rollbackTestCollection");
         mongoDatabase.getCollection("rollbackTestCollection").insertMany(Arrays.asList(
@@ -208,37 +209,15 @@ class MongoChangeTemplateTest {
                 "Should have 2 documents before rollback");
 
         MongoChangeTemplate template = new MongoChangeTemplate();
-        template.setChangeId("apply-and-rollback-test");
+        template.setChangeId("rollback-test");
         template.setTransactional(false);
 
-        // Set rollback payload - should execute in order:
-        // 1. Drop index
-        // 2. Delete all documents
-        // 3. Drop collection
-        List<MongoOperation> rollbackOps = new ArrayList<>();
-
-        MongoOperation dropIndexOp = new MongoOperation();
-        dropIndexOp.setType("dropIndex");
-        dropIndexOp.setCollection("rollbackTestCollection");
-        HashMap<String, Object> dropIndexParams = new HashMap<>();
-        dropIndexParams.put("indexName", "name_index");
-        dropIndexOp.setParameters(dropIndexParams);
-        rollbackOps.add(dropIndexOp);
-
-        MongoOperation deleteOp = new MongoOperation();
-        deleteOp.setType("delete");
-        deleteOp.setCollection("rollbackTestCollection");
-        HashMap<String, Object> deleteParams = new HashMap<>();
-        deleteParams.put("filter", new HashMap<>());
-        deleteOp.setParameters(deleteParams);
-        rollbackOps.add(deleteOp);
-
+        // Set rollback payload - drop collection
         MongoOperation dropCollectionOp = new MongoOperation();
         dropCollectionOp.setType("dropCollection");
         dropCollectionOp.setCollection("rollbackTestCollection");
-        rollbackOps.add(dropCollectionOp);
 
-        template.setRollbackPayload(rollbackOps);
+        template.setRollbackPayload(dropCollectionOp);
 
         template.rollback(mongoDatabase, null);
 
@@ -254,31 +233,29 @@ class MongoChangeTemplateTest {
 
     @Test
     @DisplayName("WHEN step-based apply succeeds THEN all steps are executed")
-    void stepBasedApplySuccess() throws Exception {
+    void stepBasedApplySuccess() {
         MongoChangeTemplate template = new MongoChangeTemplate();
         template.setChangeId("step-test");
         template.setTransactional(false);
 
-        // Create step payload programmatically
-        List<Map<String, Object>> steps = new ArrayList<>();
+        // Create step payload using TemplateStep
+        List<TemplateStep<MongoOperation, MongoOperation>> steps = new ArrayList<>();
 
         // Step 1: Create collection
-        Map<String, Object> step1 = new HashMap<>();
-        Map<String, Object> step1Apply = new HashMap<>();
-        step1Apply.put("type", "createCollection");
-        step1Apply.put("collection", "stepRollbackTest");
-        Map<String, Object> step1Rollback = new HashMap<>();
-        step1Rollback.put("type", "dropCollection");
-        step1Rollback.put("collection", "stepRollbackTest");
-        step1.put("apply", step1Apply);
-        step1.put("rollback", step1Rollback);
-        steps.add(step1);
+        MongoOperation step1Apply = new MongoOperation();
+        step1Apply.setType("createCollection");
+        step1Apply.setCollection("stepRollbackTest");
+
+        MongoOperation step1Rollback = new MongoOperation();
+        step1Rollback.setType("dropCollection");
+        step1Rollback.setCollection("stepRollbackTest");
+
+        steps.add(new TemplateStep<>(step1Apply, step1Rollback));
 
         // Step 2: Insert documents
-        Map<String, Object> step2 = new HashMap<>();
-        Map<String, Object> step2Apply = new HashMap<>();
-        step2Apply.put("type", "insert");
-        step2Apply.put("collection", "stepRollbackTest");
+        MongoOperation step2Apply = new MongoOperation();
+        step2Apply.setType("insert");
+        step2Apply.setCollection("stepRollbackTest");
         Map<String, Object> step2Params = new HashMap<>();
         List<Map<String, Object>> docs = new ArrayList<>();
         Map<String, Object> doc1 = new HashMap<>();
@@ -286,18 +263,18 @@ class MongoChangeTemplateTest {
         doc1.put("value", 100);
         docs.add(doc1);
         step2Params.put("documents", docs);
-        step2Apply.put("parameters", step2Params);
-        Map<String, Object> step2Rollback = new HashMap<>();
-        step2Rollback.put("type", "delete");
-        step2Rollback.put("collection", "stepRollbackTest");
+        step2Apply.setParameters(step2Params);
+
+        MongoOperation step2Rollback = new MongoOperation();
+        step2Rollback.setType("delete");
+        step2Rollback.setCollection("stepRollbackTest");
         Map<String, Object> step2RollbackParams = new HashMap<>();
         step2RollbackParams.put("filter", new HashMap<>());
-        step2Rollback.put("parameters", step2RollbackParams);
-        step2.put("apply", step2Apply);
-        step2.put("rollback", step2Rollback);
-        steps.add(step2);
+        step2Rollback.setParameters(step2RollbackParams);
 
-        setRawApplyPayload(template, steps);
+        steps.add(new TemplateStep<>(step2Apply, step2Rollback));
+
+        template.setStepsPayload(steps);
 
         template.apply(mongoDatabase, null);
 
@@ -308,38 +285,36 @@ class MongoChangeTemplateTest {
 
     @Test
     @DisplayName("WHEN step 2 fails THEN step 1 is rolled back")
-    void stepBasedRollbackOnFailure() throws Exception {
+    void stepBasedRollbackOnFailure() {
         MongoChangeTemplate template = new MongoChangeTemplate();
         template.setChangeId("step-rollback-test");
         template.setTransactional(false);
 
         // Create step payload that will fail on step 2
-        List<Map<String, Object>> steps = new ArrayList<>();
+        List<TemplateStep<MongoOperation, MongoOperation>> steps = new ArrayList<>();
 
         // Step 1: Create collection (will succeed)
-        Map<String, Object> step1 = new HashMap<>();
-        Map<String, Object> step1Apply = new HashMap<>();
-        step1Apply.put("type", "createCollection");
-        step1Apply.put("collection", "stepRollbackTest");
-        Map<String, Object> step1Rollback = new HashMap<>();
-        step1Rollback.put("type", "dropCollection");
-        step1Rollback.put("collection", "stepRollbackTest");
-        step1.put("apply", step1Apply);
-        step1.put("rollback", step1Rollback);
-        steps.add(step1);
+        MongoOperation step1Apply = new MongoOperation();
+        step1Apply.setType("createCollection");
+        step1Apply.setCollection("stepRollbackTest");
+
+        MongoOperation step1Rollback = new MongoOperation();
+        step1Rollback.setType("dropCollection");
+        step1Rollback.setCollection("stepRollbackTest");
+
+        steps.add(new TemplateStep<>(step1Apply, step1Rollback));
 
         // Step 2: Try to create a collection that already exists (will fail)
         // First create the collection to cause conflict
         mongoDatabase.createCollection("conflictCollection");
 
-        Map<String, Object> step2 = new HashMap<>();
-        Map<String, Object> step2Apply = new HashMap<>();
-        step2Apply.put("type", "createCollection");
-        step2Apply.put("collection", "conflictCollection"); // Already exists, will fail
-        step2.put("apply", step2Apply);
-        steps.add(step2);
+        MongoOperation step2Apply = new MongoOperation();
+        step2Apply.setType("createCollection");
+        step2Apply.setCollection("conflictCollection"); // Already exists, will fail
 
-        setRawApplyPayload(template, steps);
+        steps.add(new TemplateStep<>(step2Apply, null));
+
+        template.setStepsPayload(steps);
 
         MongoStepExecutionException exception = assertThrows(MongoStepExecutionException.class,
                 () -> template.apply(mongoDatabase, null));
@@ -357,7 +332,7 @@ class MongoChangeTemplateTest {
 
     @Test
     @DisplayName("WHEN step has no rollback THEN it is skipped during rollback")
-    void stepWithNoRollbackIsSkipped() throws Exception {
+    void stepWithNoRollbackIsSkipped() {
         // First create the collection and insert data
         mongoDatabase.createCollection("stepRollbackTest");
         mongoDatabase.getCollection("stepRollbackTest").insertOne(new Document("name", "Existing"));
@@ -367,35 +342,33 @@ class MongoChangeTemplateTest {
         template.setTransactional(false);
 
         // Create step payload where step 1 has no rollback
-        List<Map<String, Object>> steps = new ArrayList<>();
+        List<TemplateStep<MongoOperation, MongoOperation>> steps = new ArrayList<>();
 
         // Step 1: Insert (no rollback defined)
-        Map<String, Object> step1 = new HashMap<>();
-        Map<String, Object> step1Apply = new HashMap<>();
-        step1Apply.put("type", "insert");
-        step1Apply.put("collection", "stepRollbackTest");
+        MongoOperation step1Apply = new MongoOperation();
+        step1Apply.setType("insert");
+        step1Apply.setCollection("stepRollbackTest");
         Map<String, Object> step1Params = new HashMap<>();
         List<Map<String, Object>> docs = new ArrayList<>();
         Map<String, Object> doc1 = new HashMap<>();
         doc1.put("name", "NoRollback");
         docs.add(doc1);
         step1Params.put("documents", docs);
-        step1Apply.put("parameters", step1Params);
-        step1.put("apply", step1Apply);
+        step1Apply.setParameters(step1Params);
+
         // Note: no rollback defined for step 1
-        steps.add(step1);
+        steps.add(new TemplateStep<>(step1Apply, null));
 
         // Step 2: Create collection that already exists (will fail)
         mongoDatabase.createCollection("conflictCollection2");
 
-        Map<String, Object> step2 = new HashMap<>();
-        Map<String, Object> step2Apply = new HashMap<>();
-        step2Apply.put("type", "createCollection");
-        step2Apply.put("collection", "conflictCollection2"); // Already exists, will fail
-        step2.put("apply", step2Apply);
-        steps.add(step2);
+        MongoOperation step2Apply = new MongoOperation();
+        step2Apply.setType("createCollection");
+        step2Apply.setCollection("conflictCollection2"); // Already exists, will fail
 
-        setRawApplyPayload(template, steps);
+        steps.add(new TemplateStep<>(step2Apply, null));
+
+        template.setStepsPayload(steps);
 
         assertThrows(MongoStepExecutionException.class,
                 () -> template.apply(mongoDatabase, null));
@@ -412,7 +385,7 @@ class MongoChangeTemplateTest {
 
     @Test
     @DisplayName("WHEN framework triggers rollback for step-based change THEN all steps are rolled back")
-    void frameworkTriggeredRollbackForSteps() throws Exception {
+    void frameworkTriggeredRollbackForSteps() {
         // Set up the state as if steps had been applied
         mongoDatabase.createCollection("stepRollbackTest");
         mongoDatabase.getCollection("stepRollbackTest").insertMany(Arrays.asList(
@@ -429,62 +402,63 @@ class MongoChangeTemplateTest {
         template.setTransactional(false);
 
         // Create step payload
-        List<Map<String, Object>> steps = new ArrayList<>();
+        List<TemplateStep<MongoOperation, MongoOperation>> steps = new ArrayList<>();
 
         // Step 1: Create collection
-        Map<String, Object> step1 = new HashMap<>();
-        Map<String, Object> step1Apply = new HashMap<>();
-        step1Apply.put("type", "createCollection");
-        step1Apply.put("collection", "stepRollbackTest");
-        Map<String, Object> step1Rollback = new HashMap<>();
-        step1Rollback.put("type", "dropCollection");
-        step1Rollback.put("collection", "stepRollbackTest");
-        step1.put("apply", step1Apply);
-        step1.put("rollback", step1Rollback);
-        steps.add(step1);
+        MongoOperation step1Apply = new MongoOperation();
+        step1Apply.setType("createCollection");
+        step1Apply.setCollection("stepRollbackTest");
+
+        MongoOperation step1Rollback = new MongoOperation();
+        step1Rollback.setType("dropCollection");
+        step1Rollback.setCollection("stepRollbackTest");
+
+        steps.add(new TemplateStep<>(step1Apply, step1Rollback));
 
         // Step 2: Insert documents
-        Map<String, Object> step2 = new HashMap<>();
-        Map<String, Object> step2Apply = new HashMap<>();
-        step2Apply.put("type", "insert");
-        step2Apply.put("collection", "stepRollbackTest");
+        MongoOperation step2Apply = new MongoOperation();
+        step2Apply.setType("insert");
+        step2Apply.setCollection("stepRollbackTest");
         Map<String, Object> step2Params = new HashMap<>();
         List<Map<String, Object>> docs = new ArrayList<>();
-        docs.add(new HashMap<String, Object>() {{ put("name", "Item1"); }});
+        Map<String, Object> doc1 = new HashMap<>();
+        doc1.put("name", "Item1");
+        docs.add(doc1);
         step2Params.put("documents", docs);
-        step2Apply.put("parameters", step2Params);
-        Map<String, Object> step2Rollback = new HashMap<>();
-        step2Rollback.put("type", "delete");
-        step2Rollback.put("collection", "stepRollbackTest");
+        step2Apply.setParameters(step2Params);
+
+        MongoOperation step2Rollback = new MongoOperation();
+        step2Rollback.setType("delete");
+        step2Rollback.setCollection("stepRollbackTest");
         Map<String, Object> step2RollbackParams = new HashMap<>();
         step2RollbackParams.put("filter", new HashMap<>());
-        step2Rollback.put("parameters", step2RollbackParams);
-        step2.put("apply", step2Apply);
-        step2.put("rollback", step2Rollback);
-        steps.add(step2);
+        step2Rollback.setParameters(step2RollbackParams);
+
+        steps.add(new TemplateStep<>(step2Apply, step2Rollback));
 
         // Step 3: Create index
-        Map<String, Object> step3 = new HashMap<>();
-        Map<String, Object> step3Apply = new HashMap<>();
-        step3Apply.put("type", "createIndex");
-        step3Apply.put("collection", "stepRollbackTest");
+        MongoOperation step3Apply = new MongoOperation();
+        step3Apply.setType("createIndex");
+        step3Apply.setCollection("stepRollbackTest");
         Map<String, Object> step3Params = new HashMap<>();
-        step3Params.put("keys", new HashMap<String, Object>() {{ put("name", 1); }});
+        Map<String, Object> keys = new HashMap<>();
+        keys.put("name", 1);
+        step3Params.put("keys", keys);
         Map<String, Object> step3Options = new HashMap<>();
         step3Options.put("name", "step_index");
         step3Params.put("options", step3Options);
-        step3Apply.put("parameters", step3Params);
-        Map<String, Object> step3Rollback = new HashMap<>();
-        step3Rollback.put("type", "dropIndex");
-        step3Rollback.put("collection", "stepRollbackTest");
+        step3Apply.setParameters(step3Params);
+
+        MongoOperation step3Rollback = new MongoOperation();
+        step3Rollback.setType("dropIndex");
+        step3Rollback.setCollection("stepRollbackTest");
         Map<String, Object> step3RollbackParams = new HashMap<>();
         step3RollbackParams.put("indexName", "step_index");
-        step3Rollback.put("parameters", step3RollbackParams);
-        step3.put("apply", step3Apply);
-        step3.put("rollback", step3Rollback);
-        steps.add(step3);
+        step3Rollback.setParameters(step3RollbackParams);
 
-        setRawApplyPayload(template, steps);
+        steps.add(new TemplateStep<>(step3Apply, step3Rollback));
+
+        template.setStepsPayload(steps);
 
         assertTrue(collectionExists("stepRollbackTest"), "Collection should exist before rollback");
 
@@ -494,28 +468,4 @@ class MongoChangeTemplateTest {
         assertFalse(collectionExists("stepRollbackTest"),
                 "Collection should not exist after framework-triggered rollback");
     }
-
-    /**
-     * Helper method to set raw apply payload via reflection.
-     * This simulates how the framework sets the payload when loading from YAML.
-     */
-    private void setRawApplyPayload(MongoChangeTemplate template, Object payload) throws Exception {
-        java.lang.reflect.Field field = findField(template.getClass(), "applyPayload");
-        if (field != null) {
-            field.setAccessible(true);
-            field.set(template, payload);
-        }
-    }
-
-    private java.lang.reflect.Field findField(Class<?> clazz, String fieldName) {
-        while (clazz != null) {
-            try {
-                return clazz.getDeclaredField(fieldName);
-            } catch (NoSuchFieldException e) {
-                clazz = clazz.getSuperclass();
-            }
-        }
-        return null;
-    }
-
 }
