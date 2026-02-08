@@ -192,7 +192,7 @@ class MongoChangeTemplateTest {
 
     @Test
     @DisplayName("WHEN rollback is invoked THEN rollback operation executes")
-    void rollbackWithSingleOperation() {
+    void rollbackWithSingleStep() {
         // First, set up the state by creating the collection and inserting data
         mongoDatabase.createCollection("rollbackTestCollection");
         mongoDatabase.getCollection("rollbackTestCollection").insertMany(Arrays.asList(
@@ -212,12 +212,19 @@ class MongoChangeTemplateTest {
         template.setChangeId("rollback-test");
         template.setTransactional(false);
 
-        // Set rollback payload - drop collection
+        // Set rollback step - drop collection
+        List<TemplateStep<MongoOperation, MongoOperation>> steps = new ArrayList<>();
         MongoOperation dropCollectionOp = new MongoOperation();
         dropCollectionOp.setType("dropCollection");
         dropCollectionOp.setCollection("rollbackTestCollection");
 
-        template.setRollbackPayload(dropCollectionOp);
+        // Create a step with dummy apply and our rollback
+        MongoOperation dummyApply = new MongoOperation();
+        dummyApply.setType("createCollection");
+        dummyApply.setCollection("dummyCollection");
+
+        steps.add(new TemplateStep<>(dummyApply, dropCollectionOp));
+        template.setSteps(steps);
 
         template.rollback(mongoDatabase, null);
 
@@ -274,7 +281,7 @@ class MongoChangeTemplateTest {
 
         steps.add(new TemplateStep<>(step2Apply, step2Rollback));
 
-        template.setStepsPayload(steps);
+        template.setSteps(steps);
 
         template.apply(mongoDatabase, null);
 
@@ -314,7 +321,7 @@ class MongoChangeTemplateTest {
 
         steps.add(new TemplateStep<>(step2Apply, null));
 
-        template.setStepsPayload(steps);
+        template.setSteps(steps);
 
         MongoStepExecutionException exception = assertThrows(MongoStepExecutionException.class,
                 () -> template.apply(mongoDatabase, null));
@@ -368,7 +375,7 @@ class MongoChangeTemplateTest {
 
         steps.add(new TemplateStep<>(step2Apply, null));
 
-        template.setStepsPayload(steps);
+        template.setSteps(steps);
 
         assertThrows(MongoStepExecutionException.class,
                 () -> template.apply(mongoDatabase, null));
@@ -458,7 +465,7 @@ class MongoChangeTemplateTest {
 
         steps.add(new TemplateStep<>(step3Apply, step3Rollback));
 
-        template.setStepsPayload(steps);
+        template.setSteps(steps);
 
         assertTrue(collectionExists("stepRollbackTest"), "Collection should exist before rollback");
 

@@ -8,24 +8,33 @@ plugins {
 }
 
 fun flamingockVersion(): String {
-    var passedAsParameter = false
+    var source = "default"
     val flamingockVersionAsParameter: String? = project.findProperty("flamingockVersion")?.toString()
     val flamingockVersion: String = if (flamingockVersionAsParameter != null) {
-        passedAsParameter = true
+        source = "parameter"
         flamingockVersionAsParameter
     } else {
-        val metadataUrl = "https://repo.maven.apache.org/maven2/io/flamingock/flamingock-core/maven-metadata.xml"
-        try {
-            val metadata = URL(metadataUrl).readText()
-            val documentBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder()
-            val inputStream = metadata.byteInputStream()
-            val document = documentBuilder.parse(inputStream)
-            document.getElementsByTagName("latest").item(0).textContent
-        } catch (e: Exception) {
-            throw RuntimeException("Cannot obtain Flamingock's latest version", e)
+        // Default to development version for local builds
+        // Use -PflamingockVersion=X.Y.Z to override, or set to fetch from Maven Central
+        val useLatestFromCentral = project.findProperty("useLatestFromCentral")?.toString()?.toBoolean() ?: false
+        if (useLatestFromCentral) {
+            source = "maven-central"
+            val metadataUrl = "https://repo.maven.apache.org/maven2/io/flamingock/flamingock-core/maven-metadata.xml"
+            try {
+                val metadata = URL(metadataUrl).readText()
+                val documentBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                val inputStream = metadata.byteInputStream()
+                val document = documentBuilder.parse(inputStream)
+                document.getElementsByTagName("latest").item(0).textContent
+            } catch (e: Exception) {
+                throw RuntimeException("Cannot obtain Flamingock's latest version", e)
+            }
+        } else {
+            // Default local development version
+            "1.0.1"
         }
     }
-    logger.lifecycle("Building with flamingock version${if (passedAsParameter) "[from parameter]" else ""}: $flamingockVersion")
+    logger.lifecycle("Building with flamingock version[$source]: $flamingockVersion")
     return flamingockVersion
 }
 

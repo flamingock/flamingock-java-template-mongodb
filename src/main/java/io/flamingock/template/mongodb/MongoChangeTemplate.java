@@ -20,7 +20,7 @@ import com.mongodb.client.MongoDatabase;
 import io.flamingock.api.annotations.Apply;
 import io.flamingock.api.annotations.Nullable;
 import io.flamingock.api.annotations.Rollback;
-import io.flamingock.api.template.AbstractChangeTemplate;
+import io.flamingock.api.template.AbstractSteppableTemplate;
 import io.flamingock.api.template.TemplateStep;
 import io.flamingock.template.mongodb.exception.MongoStepExecutionException;
 import io.flamingock.template.mongodb.model.MongoOperation;
@@ -37,11 +37,11 @@ import java.util.List;
 /**
  * MongoDB Change Template for executing declarative MongoDB operations defined in YAML.
  *
- * <h2>Supported YAML Structures</h2>
+ * <p>This template extends {@link AbstractSteppableTemplate} and is designed for step-based changes
+ * where each step can have its own apply and rollback operation.
  *
- * <h3>Step-Based Format (Recommended)</h3>
- * <p>Each step contains an apply operation and optional rollback operation.
- * When a step fails, all previously successful steps are rolled back in reverse order.</p>
+ * <h2>YAML Structure</h2>
+ *
  * <pre>{@code
  * id: create-orders-collection
  * transactional: false
@@ -68,34 +68,17 @@ import java.util.List;
  *         filter: {}
  * }</pre>
  *
- * <h3>Simple Apply/Rollback Format</h3>
- * <p>Single apply and rollback operation. The framework handles rollback invocation on failure.</p>
- * <pre>{@code
- * id: create-orders-collection
- * transactional: true
- * template: MongoChangeTemplate
- * targetSystem:
- *   id: "mongodb"
- * apply:
- *   type: createCollection
- *   collection: orders
- * rollback:
- *   type: dropCollection
- *   collection: orders
- * }</pre>
- *
  * <h2>Execution Behavior</h2>
  * <ul>
- *   <li>Step-based format: Each step's apply operation executes sequentially. On failure,
- *       rollback operations for completed steps execute in reverse order.</li>
- *   <li>Simple format: Apply operation executes. Rollback executes on failure.</li>
- *   <li>In transactional mode, MongoDB transaction provides atomicity.</li>
+ *   <li>Each step's apply operation executes sequentially</li>
+ *   <li>On failure, rollback operations for completed steps execute in reverse order</li>
+ *   <li>In transactional mode, MongoDB transaction provides atomicity</li>
  * </ul>
  *
  * @see MongoOperation
  * @see TemplateStep
  */
-public class MongoChangeTemplate extends AbstractChangeTemplate<Void, MongoOperation, MongoOperation> {
+public class MongoChangeTemplate extends AbstractSteppableTemplate<Void, MongoOperation, MongoOperation> {
 
     private static final Logger log = LoggerFactory.getLogger(MongoChangeTemplate.class);
 
@@ -107,12 +90,11 @@ public class MongoChangeTemplate extends AbstractChangeTemplate<Void, MongoOpera
     public void apply(MongoDatabase db, @Nullable ClientSession clientSession) {
         validateSession(clientSession);
 
-        if (hasStepsPayload()) {
-            validateStepsPayload(stepsPayload);
-            executeStepsWithRollback(db, stepsPayload, clientSession);
-        } else if (applyPayload != null) {
-            validatePayload(applyPayload, changeId + ".apply");
-            applyPayload.getOperator(db).apply(clientSession);
+        if (hasSteps()) {
+            validateStepsPayload(steps);
+            executeStepsWithRollback(db, steps, clientSession);
+        } else {
+            log.warn("No steps defined for change[{}]", changeId);
         }
     }
 
@@ -120,14 +102,8 @@ public class MongoChangeTemplate extends AbstractChangeTemplate<Void, MongoOpera
     public void rollback(MongoDatabase db, @Nullable ClientSession clientSession) {
         validateSession(clientSession);
 
-        if (hasStepsPayload()) {
-            // Framework-triggered rollback: rollback all steps in reverse order
-            if (stepsPayload != null && !stepsPayload.isEmpty()) {
-                rollbackAllSteps(db, stepsPayload, clientSession);
-            }
-        } else if (rollbackPayload != null) {
-            validatePayload(rollbackPayload, changeId + ".rollback");
-            rollbackPayload.getOperator(db).apply(clientSession);
+        if (hasSteps()) {
+            rollbackAllSteps(db, steps, clientSession);
         }
     }
 
@@ -135,17 +111,6 @@ public class MongoChangeTemplate extends AbstractChangeTemplate<Void, MongoOpera
         if (this.isTransactional && clientSession == null) {
             throw new IllegalArgumentException(
                     String.format("Transactional change[%s] requires transactional ecosystem with ClientSession", changeId));
-        }
-    }
-
-    private void validatePayload(MongoOperation operation, String entityId) {
-        if (operation == null) {
-            return;
-        }
-
-        List<ValidationError> errors = MongoOperationValidator.validate(operation, entityId);
-        if (!errors.isEmpty()) {
-            throw new MongoTemplateValidationException(errors);
         }
     }
 
