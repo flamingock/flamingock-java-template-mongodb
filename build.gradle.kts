@@ -31,7 +31,7 @@ fun flamingockVersion(): String {
             }
         } else {
             // Default local development version
-            "1.0.1"
+            "1.1.0-rc.2"
         }
     }
     logger.lifecycle("Building with flamingock version[$source]: $flamingockVersion")
