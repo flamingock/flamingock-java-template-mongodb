@@ -1,1 +1,1 @@
-rootProject.name = "flamingock-mongodb-sync-template"
+rootProject.name = "flamingock-template-mongodb-sync"

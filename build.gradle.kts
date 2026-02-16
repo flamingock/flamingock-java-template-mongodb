@@ -1,9 +1,12 @@
 import java.net.URL
 import javax.xml.parsers.DocumentBuilderFactory
+import org.jreleaser.model.Active
+import org.jreleaser.model.UpdateSection
 
 plugins {
     `java-library`
     `maven-publish`
+    id("org.jreleaser") version "1.15.0"
     id("com.diffplug.spotless") version "6.25.0"
 }
 
@@ -78,38 +81,141 @@ configurations.testImplementation {
 
 tasks.test {
     useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+    }
 }
 
 publishing {
     publications {
         create<MavenPublication>("maven") {
+            groupId = project.group.toString()
+            artifactId = project.name
+            version = project.version.toString()
             from(components["java"])
 
             pom {
-                name.set("Flamingock MongoDB Sync Template")
-                description.set("MongoDB change templates for document database operations using Flamingock")
+                name.set(project.name)
+                description.set(project.description)
                 url.set("https://flamingock.io")
+                inceptionYear.set("2024")
+
+                organization {
+                    name.set("Flamingock")
+                    url.set("https://www.flamingock.io")
+                }
 
                 licenses {
                     license {
-                        name.set("Apache License, Version 2.0")
-                        url.set("https://www.apache.org/licenses/LICENSE-2.0")
+                        name.set("Apache-2.0")
+                        url.set("https://spdx.org/licenses/Apache-2.0.html")
                     }
                 }
 
                 developers {
                     developer {
-                        id.set("flamingock")
-                        name.set("Flamingock Team")
-                        organization.set("Flamingock")
-                        organizationUrl.set("https://flamingock.io")
+                        id.set("dieppa")
+                        name.set("Antonio Perez Dieppa")
+                        email.set("aperezdieppa@flamingock.io")
+                    }
+                    developer {
+                        id.set("osantana")
+                        name.set("Oliver Santana")
+                        email.set("osantana@flamingock.io")
+                    }
+                    developer {
+                        id.set("bercianor")
+                        name.set("Ruben Berciano")
+                        email.set("bercianor@flamingock.io")
+                    }
+                    developer {
+                        id.set("dfrigolet")
+                        name.set("David Frigolet")
+                        email.set("dfrigolet@flamingock.io")
                     }
                 }
 
+                issueManagement {
+                    system.set("GitHub")
+                    url.set("https://github.com/flamingock/flamingock-java-template-mongodb/issues")
+                }
+
                 scm {
-                    connection.set("scm:git:git://github.com/flamingock/flamingock-java-template-mongodb.git")
-                    developerConnection.set("scm:git:ssh://github.com/flamingock/flamingock-java-template-mongodb.git")
+                    connection.set("scm:git:https://github.com/flamingock/flamingock-java-template-mongodb.git")
+                    developerConnection.set("scm:git:ssh://github.com:flamingock/flamingock-java-template-mongodb.git")
                     url.set("https://github.com/flamingock/flamingock-java-template-mongodb")
+                }
+            }
+        }
+    }
+}
+
+jreleaser {
+    project {
+        inceptionYear.set("2024")
+        authors.set(setOf("dieppa", "osantana", "bercianor", "dfrigolet"))
+    }
+    signing {
+        active.set(Active.ALWAYS)
+        armored = true
+        enabled = true
+    }
+    gitRootSearch.set(true)
+    release {
+        github {
+            update {
+                enabled.set(true)
+                sections.set(setOf(UpdateSection.TITLE, UpdateSection.BODY, UpdateSection.ASSETS))
+            }
+            prerelease {
+                pattern.set("^(0\\..*|.*-(beta\\.?\\d*|snapshot\\.?\\d*|alpha\\.?\\d*|rc\\.?\\d*|RC\\.?\\d*)\$)")
+            }
+            changelog {
+                enabled.set(true)
+                formatted.set(Active.ALWAYS)
+                sort.set(org.jreleaser.model.Changelog.Sort.DESC)
+                links.set(true)
+                preset.set("conventional-commits")
+                releaseName.set("Release {{tagName}}")
+                content.set("""
+                        ## Changelog
+                        {{changelogChanges}}
+                        {{changelogContributors}}
+                    """.trimIndent())
+                categoryTitleFormat.set("### {{categoryTitle}}")
+                format.set(
+                    """|- {{commitShortHash}}
+                           | {{#commitIsConventional}}
+                           |{{#conventionalCommitIsBreakingChange}}:rotating_light: {{/conventionalCommitIsBreakingChange}}
+                           |{{#conventionalCommitScope}}**{{conventionalCommitScope}}**: {{/conventionalCommitScope}}
+                           |{{conventionalCommitDescription}}
+                           |{{#conventionalCommitBreakingChangeContent}} - *{{conventionalCommitBreakingChangeContent}}*{{/conventionalCommitBreakingChangeContent}}
+                           |{{/commitIsConventional}}
+                           |{{^commitIsConventional}}{{commitTitle}}{{/commitIsConventional}}
+                           |{{#commitHasIssues}}, closes{{#commitIssues}} {{issue}}{{/commitIssues}}{{/commitHasIssues}}
+                           |{{#contributorName}} ({{contributorName}}){{/contributorName}}
+                        |""".trimMargin().replace("\n", "").replace("\r", "")
+                )
+                contributors {
+                    enabled.set(true)
+                    format.set("- {{contributorName}} ({{contributorUsernameAsLink}})")
+                }
+            }
+        }
+    }
+    deploy {
+        maven {
+            mavenCentral {
+                create("sonatype") {
+                    active.set(Active.ALWAYS)
+                    applyMavenCentralRules.set(true)
+                    url.set("https://central.sonatype.com/api/v1/publisher")
+                    stagingRepository("build/staging-deploy")
+                    maxRetries.set(90)
+                    retryDelay.set(20)
                 }
             }
         }
