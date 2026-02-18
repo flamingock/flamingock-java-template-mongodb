@@ -1,47 +1,14 @@
-import java.net.URL
-import javax.xml.parsers.DocumentBuilderFactory
-
 plugins {
     `java-library`
     `maven-publish`
     id("com.diffplug.spotless") version "6.25.0"
 }
 
-fun flamingockVersion(): String {
-    var source = "default"
-    val flamingockVersionAsParameter: String? = project.findProperty("flamingockVersion")?.toString()
-    val flamingockVersion: String = if (flamingockVersionAsParameter != null) {
-        source = "parameter"
-        flamingockVersionAsParameter
-    } else {
-        // Default to development version for local builds
-        // Use -PflamingockVersion=X.Y.Z to override, or set to fetch from Maven Central
-        val useLatestFromCentral = project.findProperty("useLatestFromCentral")?.toString()?.toBoolean() ?: false
-        if (useLatestFromCentral) {
-            source = "maven-central"
-            val metadataUrl = "https://repo.maven.apache.org/maven2/io/flamingock/flamingock-core/maven-metadata.xml"
-            try {
-                val metadata = URL(metadataUrl).readText()
-                val documentBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder()
-                val inputStream = metadata.byteInputStream()
-                val document = documentBuilder.parse(inputStream)
-                document.getElementsByTagName("latest").item(0).textContent
-            } catch (e: Exception) {
-                throw RuntimeException("Cannot obtain Flamingock's latest version", e)
-            }
-        } else {
-            // Default local development version
-            "1.1.0-rc.2"
-        }
-    }
-    logger.lifecycle("Building with flamingock version[$source]: $flamingockVersion")
-    return flamingockVersion
-}
 
-val flamingockVersion = flamingockVersion()
+val flamingockVersion = "1.1.0-rc.2"
 
 group = "io.flamingock"
-version = flamingockVersion
+version = "1.0.0-rc.1"
 
 repositories {
     mavenLocal()
