@@ -33,7 +33,8 @@ A Flamingock template for declarative MongoDB database operations using YAML-bas
 
 - **Declarative YAML-based changes** — Define MongoDB operations in simple YAML files
 - **11 supported operation types** — Collections, indexes, documents, and views
-- **Rollback support** — Optional rollback operations for reversible changes
+- **Step-based format** — Each change is a list of steps, each with an apply and optional rollback operation
+- **Automatic rollback on failure** — The framework rolls back completed steps in reverse order if a step fails
 - **Transaction support** — Configurable transactional execution
 - **Java SPI integration** — Automatically discovered by Flamingock at runtime
 
@@ -64,6 +65,8 @@ implementation("io.flamingock:flamingock-mongodb-sync-template:1.0.0")
 
 Place your change files in `src/main/resources/flamingock/changes/` (or your configured changes directory).
 
+All changes use the `steps` format — a list of operations, each with an `apply` and optional `rollback`. Even single operations are wrapped in a step.
+
 **Example: `_0001__create_users_collection.yaml`**
 
 ```yaml
@@ -72,9 +75,13 @@ transactional: false
 template: MongoChangeTemplate
 targetSystem:
   id: "mongodb"
-apply:
-  - type: createCollection
-    collection: users
+steps:
+  - apply:
+      type: createCollection
+      collection: users
+    rollback:
+      type: dropCollection
+      collection: users
 ```
 
 ### 2. Insert seed data
@@ -87,44 +94,59 @@ transactional: true
 template: MongoChangeTemplate
 targetSystem:
   id: "mongodb"
-apply:
-  - type: insert
-    collection: users
-    parameters:
-      documents:
-        - name: "Admin"
-          email: "admin@company.com"
-          roles: ["superuser"]
-        - name: "Backup"
-          email: "backup@company.com"
-          roles: ["readonly"]
+steps:
+  - apply:
+      type: insert
+      collection: users
+      parameters:
+        documents:
+          - name: "Admin"
+            email: "admin@company.com"
+            roles: ["superuser"]
+          - name: "Backup"
+            email: "backup@company.com"
+            roles: ["readonly"]
+    rollback:
+      type: delete
+      collection: users
+      parameters:
+        filter: {}
 ```
 
-### 3. Create indexes with rollback
+### 3. Multiple operations with rollback
 
-**Example: `_0003__create_indexes.yaml`**
+Group multiple operations in a single change. If a step fails, the framework automatically rolls back completed steps in reverse order.
+
+**Example: `_0003__setup_products.yaml`**
 
 ```yaml
-id: create-user-indexes
+id: setup-products
 transactional: false
 template: MongoChangeTemplate
 targetSystem:
   id: "mongodb"
-apply:
-  - type: createIndex
-    collection: users
-    parameters:
-      keys:
-        email: 1
-      options:
-        name: "email_unique_index"
-        unique: true
 
-rollback:
-  - type: dropIndex
-    collection: users
-    parameters:
-      indexName: "email_unique_index"
+steps:
+  - apply:
+      type: createCollection
+      collection: products
+    rollback:
+      type: dropCollection
+      collection: products
+
+  - apply:
+      type: createIndex
+      collection: products
+      parameters:
+        keys:
+          category: 1
+        options:
+          name: "category_index"
+    rollback:
+      type: dropIndex
+      collection: products
+      parameters:
+        indexName: "category_index"
 ```
 
 ---
@@ -149,6 +171,8 @@ rollback:
 
 ## 📄 YAML Structure
 
+The MongoDB template uses the **steps format** — each change is a list of steps, where each step has an `apply` operation and an optional `rollback` operation.
+
 ```yaml
 # Required: Unique identifier for this change
 id: my-change-id
@@ -166,110 +190,188 @@ template: MongoChangeTemplate
 targetSystem:
   id: "mongodb"
 
-# Required: List of operations to apply
-apply:
-  - type: <operation-type>
-    collection: <collection-name>
-    parameters:
-      # Operation-specific parameters
+# Required: List of steps, each with an apply and optional rollback
+steps:
+  - apply:
+      type: <operation-type>
+      collection: <collection-name>
+      parameters:
+        # Operation-specific parameters
+    rollback:
+      type: <operation-type>
+      collection: <collection-name>
+      parameters:
+        # Operation-specific parameters
 
-# Optional: List of operations to rollback
-rollback:
-  - type: <operation-type>
-    collection: <collection-name>
-    parameters:
-      # Operation-specific parameters
+  - apply:
+      type: <another-operation>
+      collection: <collection-name>
+    rollback:
+      type: <rollback-operation>
+      collection: <collection-name>
 ```
+
+Steps are executed in order. If a step fails, the framework automatically rolls back all previously completed steps in reverse order (for steps that have a `rollback` defined).
 
 ---
 
 ## 💡 Operation Examples
 
+Each example below shows a step entry inside the `steps` list.
+
 ### Create Collection
 
 ```yaml
-apply:
-  - type: createCollection
-    collection: products
+steps:
+  - apply:
+      type: createCollection
+      collection: products
+    rollback:
+      type: dropCollection
+      collection: products
 ```
 
 ### Create Index
 
 ```yaml
-apply:
-  - type: createIndex
-    collection: products
-    parameters:
-      keys:
-        category: 1
-        price: -1
-      options:
-        name: "category_price_index"
-        background: true
+steps:
+  - apply:
+      type: createIndex
+      collection: products
+      parameters:
+        keys:
+          category: 1
+          price: -1
+        options:
+          name: "category_price_index"
+          background: true
+    rollback:
+      type: dropIndex
+      collection: products
+      parameters:
+        indexName: "category_price_index"
 ```
 
 ### Insert Documents
 
 ```yaml
-apply:
-  - type: insert
-    collection: products
-    parameters:
-      documents:
-        - name: "Widget"
-          price: 29.99
-          category: "electronics"
-        - name: "Gadget"
-          price: 49.99
-          category: "electronics"
+steps:
+  - apply:
+      type: insert
+      collection: products
+      parameters:
+        documents:
+          - name: "Widget"
+            price: 29.99
+            category: "electronics"
+          - name: "Gadget"
+            price: 49.99
+            category: "electronics"
+    rollback:
+      type: delete
+      collection: products
+      parameters:
+        filter: {}
 ```
 
 ### Update Documents
 
 ```yaml
-apply:
-  - type: update
-    collection: products
-    parameters:
-      filter:
-        category: "electronics"
-      update:
-        $set:
-          discounted: true
+steps:
+  - apply:
+      type: update
+      collection: products
+      parameters:
+        filter:
+          category: "electronics"
+        update:
+          $set:
+            discounted: true
 ```
 
 ### Delete Documents
 
 ```yaml
-apply:
-  - type: delete
-    collection: products
-    parameters:
-      filter:
-        discounted: true
+steps:
+  - apply:
+      type: delete
+      collection: products
+      parameters:
+        filter:
+          discounted: true
 ```
 
 ### Rename Collection
 
 ```yaml
-apply:
-  - type: renameCollection
-    collection: oldName
-    parameters:
-      newName: newName
+steps:
+  - apply:
+      type: renameCollection
+      collection: oldName
+      parameters:
+        newName: newName
 ```
 
 ### Create View
 
 ```yaml
-apply:
-  - type: createView
-    collection: activeUsers
-    parameters:
-      viewOn: users
-      pipeline:
-        - $match:
-            active: true
+steps:
+  - apply:
+      type: createView
+      collection: activeUsers
+      parameters:
+        viewOn: users
+        pipeline:
+          - $match:
+              active: true
+```
+
+### Complete Example — Multiple Steps
+
+A full change file with multiple steps and paired rollbacks:
+
+```yaml
+id: setup-orders
+transactional: false
+template: MongoChangeTemplate
+targetSystem:
+  id: "mongodb"
+
+steps:
+  - apply:
+      type: createCollection
+      collection: orders
+    rollback:
+      type: dropCollection
+      collection: orders
+
+  - apply:
+      type: insert
+      collection: orders
+      parameters:
+        documents:
+          - orderId: "ORD-001"
+            status: "pending"
+    rollback:
+      type: delete
+      collection: orders
+      parameters:
+        filter: {}
+
+  - apply:
+      type: createIndex
+      collection: orders
+      parameters:
+        keys:
+          orderId: 1
+        options:
+          name: "orderId_index"
+          unique: true
+    rollback:
+      type: dropIndex
+      collection: orders
+      parameters:
+        indexName: "orderId_index"
 ```
 
 ---

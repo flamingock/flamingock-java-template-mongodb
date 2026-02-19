@@ -3,6 +3,10 @@ transactional: false
 template: MongoChangeTemplate
 targetSystem:
   id: "mongodb"
-apply:
-  - type: createCollection
-    collection: users
+steps:
+  - apply:
+      type: createCollection
+      collection: users
+    rollback:
+      type: dropCollection
+      collection: users

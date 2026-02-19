@@ -1,4 +1,4 @@
-id: apply-and-rollback-test
+id: step-based-change
 transactional: false
 template: MongoChangeTemplate
 targetSystem:
@@ -7,37 +7,37 @@ targetSystem:
 steps:
   - apply:
       type: createCollection
-      collection: rollbackTestCollection
+      collection: stepTestCollection
     rollback:
       type: dropCollection
-      collection: rollbackTestCollection
+      collection: stepTestCollection
 
   - apply:
       type: insert
-      collection: rollbackTestCollection
+      collection: stepTestCollection
       parameters:
         documents:
-          - name: "Item1"
+          - name: "StepItem1"
             value: 100
-          - name: "Item2"
+          - name: "StepItem2"
             value: 200
     rollback:
       type: delete
-      collection: rollbackTestCollection
+      collection: stepTestCollection
       parameters:
         filter: {}
 
   - apply:
       type: createIndex
-      collection: rollbackTestCollection
+      collection: stepTestCollection
       parameters:
         keys:
           name: 1
         options:
-          name: "name_index"
+          name: "step_name_index"
           unique: true
     rollback:
       type: dropIndex
-      collection: rollbackTestCollection
+      collection: stepTestCollection
       parameters:
-        indexName: "name_index"
+        indexName: "step_name_index"

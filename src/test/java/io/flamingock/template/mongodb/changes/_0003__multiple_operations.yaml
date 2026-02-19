@@ -3,28 +3,45 @@ transactional: false
 template: MongoChangeTemplate
 targetSystem:
   id: "mongodb"
-apply:
-  - type: createCollection
-    collection: products
 
-  - type: insert
-    collection: products
-    parameters:
-      documents:
-        - name: "Laptop"
-          price: 999.99
-          category: "Electronics"
-        - name: "Keyboard"
-          price: 79.99
-          category: "Electronics"
-        - name: "Mouse"
-          price: 29.99
-          category: "Electronics"
+steps:
+  - apply:
+      type: createCollection
+      collection: products
+    rollback:
+      type: dropCollection
+      collection: products
 
-  - type: createIndex
-    collection: products
-    parameters:
-      keys:
-        category: 1
-      options:
-        name: "category_index"
+  - apply:
+      type: insert
+      collection: products
+      parameters:
+        documents:
+          - name: "Laptop"
+            price: 999.99
+            category: "Electronics"
+          - name: "Keyboard"
+            price: 79.99
+            category: "Electronics"
+          - name: "Mouse"
+            price: 29.99
+            category: "Electronics"
+    rollback:
+      type: delete
+      collection: products
+      parameters:
+        filter: {}
+
+  - apply:
+      type: createIndex
+      collection: products
+      parameters:
+        keys:
+          category: 1
+        options:
+          name: "category_index"
+    rollback:
+      type: dropIndex
+      collection: products
+      parameters:
+        indexName: "category_index"

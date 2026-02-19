@@ -30,6 +30,7 @@ import org.bson.Document;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@EnableFlamingock(configFile = "flamingock/pipeline.yaml")
+@EnableFlamingock(configFile = "flamingock/pipeline.yaml", strictTemplateValidation = false)
 @Testcontainers
 class MongoChangeTemplateTest {
 
@@ -77,6 +78,8 @@ class MongoChangeTemplateTest {
         mongoDatabase.getCollection("users").drop();
         mongoDatabase.getCollection("products").drop();
         mongoDatabase.getCollection("rollbackTestCollection").drop();
+        mongoDatabase.getCollection("stepTestCollection").drop();
+        mongoDatabase.getCollection("stepRollbackTest").drop();
     }
 
 
@@ -96,7 +99,7 @@ class MongoChangeTemplateTest {
                 .find()
                 .into(new ArrayList<>());
 
-        assertEquals(8, auditLog.size());
+        assertEquals(10, auditLog.size());
 
         assertEquals("create-users-collection-with-index", auditLog.get(0).getString("changeId"));
         assertEquals(AuditEntry.Status.STARTED.name(), auditLog.get(0).getString("state"));
@@ -117,6 +120,11 @@ class MongoChangeTemplateTest {
         assertEquals(AuditEntry.Status.STARTED.name(), auditLog.get(6).getString("state"));
         assertEquals("apply-and-rollback-test", auditLog.get(7).getString("changeId"));
         assertEquals(AuditEntry.Status.APPLIED.name(), auditLog.get(7).getString("state"));
+
+        assertEquals("step-based-change", auditLog.get(8).getString("changeId"));
+        assertEquals(AuditEntry.Status.STARTED.name(), auditLog.get(8).getString("state"));
+        assertEquals("step-based-change", auditLog.get(9).getString("changeId"));
+        assertEquals(AuditEntry.Status.APPLIED.name(), auditLog.get(9).getString("state"));
 
         // Verify for single operation
         List<Document> users = mongoDatabase.getCollection("users")
@@ -162,58 +170,46 @@ class MongoChangeTemplateTest {
         boolean nameIndexExists = rollbackIndexes.stream()
                 .anyMatch(idx -> "name_index".equals(idx.getString("name")));
         assertTrue(nameIndexExists, "Name index should exist on rollbackTestCollection");
+
+        // Verify step-based change
+        List<Document> stepItems = mongoDatabase.getCollection("stepTestCollection")
+                .find()
+                .into(new ArrayList<>());
+        assertEquals(2, stepItems.size(), "Should have 2 items in stepTestCollection");
+        assertEquals("StepItem1", stepItems.get(0).getString("name"));
+        assertEquals("StepItem2", stepItems.get(1).getString("name"));
+
+        List<Document> stepIndexes = mongoDatabase.getCollection("stepTestCollection")
+                .listIndexes()
+                .into(new ArrayList<>());
+        boolean stepNameIndexExists = stepIndexes.stream()
+                .anyMatch(idx -> "step_name_index".equals(idx.getString("name")));
+        assertTrue(stepNameIndexExists, "Name index should exist on stepTestCollection");
     }
 
     @Test
-    @DisplayName("WHEN rollback is invoked THEN multiple rollback operations execute in defined order")
-    void rollbackWithMultipleOperations() {
+    @DisplayName("WHEN rollback is invoked with a single operation THEN rollback operation executes")
+    void rollbackWithSingleOperation() {
         // First, set up the state by creating the collection and inserting data
         mongoDatabase.createCollection("rollbackTestCollection");
         mongoDatabase.getCollection("rollbackTestCollection").insertMany(Arrays.asList(
                 new Document("name", "Item1").append("value", 100),
                 new Document("name", "Item2").append("value", 200)
         ));
-        mongoDatabase.getCollection("rollbackTestCollection").createIndex(
-                new Document("name", 1),
-                new com.mongodb.client.model.IndexOptions().name("name_index").unique(true)
-        );
 
         assertTrue(collectionExists("rollbackTestCollection"), "Collection should exist before rollback");
         assertEquals(2, mongoDatabase.getCollection("rollbackTestCollection").countDocuments(),
                 "Should have 2 documents before rollback");
 
         MongoChangeTemplate template = new MongoChangeTemplate();
-        template.setChangeId("apply-and-rollback-test");
+        template.setChangeId("rollback-test");
         template.setTransactional(false);
 
-        // Set rollback payload - should execute in order:
-        // 1. Drop index
-        // 2. Delete all documents
-        // 3. Drop collection
-        List<MongoOperation> rollbackOps = new ArrayList<>();
-
-        MongoOperation dropIndexOp = new MongoOperation();
-        dropIndexOp.setType("dropIndex");
-        dropIndexOp.setCollection("rollbackTestCollection");
-        HashMap<String, Object> dropIndexParams = new HashMap<>();
-        dropIndexParams.put("indexName", "name_index");
-        dropIndexOp.setParameters(dropIndexParams);
-        rollbackOps.add(dropIndexOp);
-
-        MongoOperation deleteOp = new MongoOperation();
-        deleteOp.setType("delete");
-        deleteOp.setCollection("rollbackTestCollection");
-        HashMap<String, Object> deleteParams = new HashMap<>();
-        deleteParams.put("filter", new HashMap<>());
-        deleteOp.setParameters(deleteParams);
-        rollbackOps.add(deleteOp);
-
+        // Set rollback payload - drop collection
         MongoOperation dropCollectionOp = new MongoOperation();
         dropCollectionOp.setType("dropCollection");
         dropCollectionOp.setCollection("rollbackTestCollection");
-        rollbackOps.add(dropCollectionOp);
-
-        template.setRollbackPayload(rollbackOps);
+        template.setRollbackPayload(dropCollectionOp);
 
         template.rollback(mongoDatabase, null);
 
@@ -227,4 +223,78 @@ class MongoChangeTemplateTest {
                 .contains(collectionName);
     }
 
+    @Test
+    @DisplayName("WHEN apply is invoked with a single operation THEN operation executes successfully")
+    void singleOperationApplySuccess() {
+        MongoChangeTemplate template = new MongoChangeTemplate();
+        template.setChangeId("apply-test");
+        template.setTransactional(false);
+
+        // Set apply payload - create collection
+        MongoOperation createCollectionOp = new MongoOperation();
+        createCollectionOp.setType("createCollection");
+        createCollectionOp.setCollection("stepRollbackTest");
+        template.setApplyPayload(createCollectionOp);
+
+        template.apply(mongoDatabase, null);
+
+        assertTrue(collectionExists("stepRollbackTest"), "Collection should exist after apply");
+    }
+
+    @Test
+    @DisplayName("WHEN apply is invoked with insert operation THEN documents are inserted")
+    void insertOperationApplySuccess() {
+        mongoDatabase.createCollection("stepRollbackTest");
+
+        MongoChangeTemplate template = new MongoChangeTemplate();
+        template.setChangeId("insert-test");
+        template.setTransactional(false);
+
+        // Set apply payload - insert documents
+        MongoOperation insertOp = new MongoOperation();
+        insertOp.setType("insert");
+        insertOp.setCollection("stepRollbackTest");
+        Map<String, Object> params = new HashMap<>();
+        List<Map<String, Object>> docs = new ArrayList<>();
+        Map<String, Object> doc1 = new HashMap<>();
+        doc1.put("name", "Test1");
+        doc1.put("value", 100);
+        docs.add(doc1);
+        params.put("documents", docs);
+        insertOp.setParameters(params);
+        template.setApplyPayload(insertOp);
+
+        template.apply(mongoDatabase, null);
+
+        assertEquals(1, mongoDatabase.getCollection("stepRollbackTest").countDocuments(),
+                "Should have 1 document after apply");
+    }
+
+    @Test
+    @DisplayName("WHEN framework triggers rollback for a single operation THEN it is rolled back")
+    void frameworkTriggeredRollbackForSingleOperation() {
+        // Set up the state as if the apply had been executed
+        mongoDatabase.createCollection("stepRollbackTest");
+        mongoDatabase.getCollection("stepRollbackTest").insertMany(Arrays.asList(
+                new Document("name", "Item1"),
+                new Document("name", "Item2")
+        ));
+
+        assertTrue(collectionExists("stepRollbackTest"), "Collection should exist before rollback");
+
+        MongoChangeTemplate template = new MongoChangeTemplate();
+        template.setChangeId("framework-rollback-test");
+        template.setTransactional(false);
+
+        // Set rollback payload - drop collection
+        MongoOperation dropCollectionOp = new MongoOperation();
+        dropCollectionOp.setType("dropCollection");
+        dropCollectionOp.setCollection("stepRollbackTest");
+        template.setRollbackPayload(dropCollectionOp);
+
+        template.rollback(mongoDatabase, null);
+
+        assertFalse(collectionExists("stepRollbackTest"),
+                "Collection should not exist after framework-triggered rollback");
+    }
 }

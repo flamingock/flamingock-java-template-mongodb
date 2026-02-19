@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew dependencies:*)",
+      "WebSearch",
+      "WebFetch(domain:java.testcontainers.org)",
+      "WebFetch(domain:docs.openrewrite.org)",
+      "WebFetch(domain:github.com)",
+      "Bash(timeout 120 ./gradlew test:*)",
+      "Bash(gtimeout:*)",
+      "Bash(perl -e:*)",
+      "WebFetch(domain:mvnrepository.com)",
+      "Bash(javap:*)",
+      "Bash(TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock ./gradlew test:*)",
+      "Bash(docker stop:*)",
+      "Bash(./gradlew clean:*)"
+    ]
+  }
+}
