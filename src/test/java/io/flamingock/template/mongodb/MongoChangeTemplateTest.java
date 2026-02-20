@@ -21,16 +21,12 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
 import io.flamingock.api.annotations.EnableFlamingock;
-import io.flamingock.store.mongodb.sync.MongoDBSyncAuditStore;
 import io.flamingock.internal.common.core.audit.AuditEntry;
 import io.flamingock.internal.core.builder.FlamingockFactory;
+import io.flamingock.store.mongodb.sync.MongoDBSyncAuditStore;
 import io.flamingock.targetsystem.mongodb.sync.MongoDBSyncTargetSystem;
 import io.flamingock.template.mongodb.model.MongoOperation;
 import org.bson.Document;
-
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,27 +37,25 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static io.flamingock.internal.util.constants.CommunityPersistenceConstants.DEFAULT_AUDIT_STORE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@EnableFlamingock(configFile = "flamingock/pipeline.yaml", strictTemplateValidation = false)
+@EnableFlamingock(configFile = "flamingock/pipeline.yaml")
 @Testcontainers
 class MongoChangeTemplateTest {
 
-    private static final String DB_NAME = "test";
-
-
-    private static MongoClient mongoClient;
-
-    private static MongoDatabase mongoDatabase;
-
-
     @Container
     public static final MongoDBContainer mongoDBContainer = new MongoDBContainer(DockerImageName.parse("mongo:6"));
+    private static final String DB_NAME = "test";
+    private static MongoClient mongoClient;
+    private static MongoDatabase mongoDatabase;
 
     @BeforeAll
     static void beforeAll() {
