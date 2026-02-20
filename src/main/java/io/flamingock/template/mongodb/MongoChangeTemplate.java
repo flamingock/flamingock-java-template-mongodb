@@ -77,7 +77,7 @@ import java.util.List;
  *
  * @see MongoOperation
  */
-@ChangeTemplate(multiStep = true)
+@ChangeTemplate( name = "mongodb-sync-template", multiStep = true)
 public class MongoChangeTemplate extends AbstractChangeTemplate<Void, MongoOperation, MongoOperation> {
 
     private static final Logger log = LoggerFactory.getLogger(MongoChangeTemplate.class);
