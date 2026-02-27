@@ -13,7 +13,14 @@
       "Bash(javap:*)",
       "Bash(TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock ./gradlew test:*)",
       "Bash(docker stop:*)",
-      "Bash(./gradlew clean:*)"
+      "Bash(./gradlew clean:*)",
+      "Bash(./gradlew :core:flamingock-core:test:*)",
+      "Bash(./gradlew :platform-plugins:flamingock-springboot-integration:test:*)",
+      "WebFetch(domain:flamingock.io)",
+      "WebFetch(domain:docs.flamingock.io)",
+      "Bash(wc:*)",
+      "Bash(./gradlew test:*)",
+      "Bash(./gradlew spotlessCheck:*)"
     ]
   }
 }

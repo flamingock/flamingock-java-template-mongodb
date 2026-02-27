@@ -1,6 +1,6 @@
 id: apply-and-rollback-test
 transactional: false
-template: MongoChangeTemplate
+template: mongodb-sync-template
 targetSystem:
   id: "mongodb"
 

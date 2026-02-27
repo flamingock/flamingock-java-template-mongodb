@@ -72,7 +72,7 @@ All changes use the `steps` format — a list of operations, each with an `apply
 ```yaml
 id: create-users-collection
 transactional: false
-template: MongoChangeTemplate
+template: mongodb-sync-template
 targetSystem:
   id: "mongodb"
 steps:
@@ -91,7 +91,7 @@ steps:
 ```yaml
 id: seed-users
 transactional: true
-template: MongoChangeTemplate
+template: mongodb-sync-template
 targetSystem:
   id: "mongodb"
 steps:
@@ -122,7 +122,7 @@ Group multiple operations in a single change. If a step fails, the framework aut
 ```yaml
 id: setup-products
 transactional: false
-template: MongoChangeTemplate
+template: mongodb-sync-template
 targetSystem:
   id: "mongodb"
 
@@ -184,7 +184,7 @@ author: developer-name
 transactional: true
 
 # Required: Template to use
-template: MongoChangeTemplate
+template: mongodb-sync-template
 
 # Required: Target system configuration
 targetSystem:
@@ -333,7 +333,7 @@ A full change file with multiple steps and paired rollbacks:
 ```yaml
 id: setup-orders
 transactional: false
-template: MongoChangeTemplate
+template: mongodb-sync-template
 targetSystem:
   id: "mongodb"
 
