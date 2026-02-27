@@ -60,6 +60,8 @@ public class ModifyCollectionParametersValidator implements OperationValidator {
                     "'validationAction' must be one of: 'error', 'warn'"));
         }
 
+        errors.addAll(OperationValidator.checkUnrecognizedKeys(params, RECOGNIZED_KEYS, "ModifyCollection"));
+
         return errors;
     }
 

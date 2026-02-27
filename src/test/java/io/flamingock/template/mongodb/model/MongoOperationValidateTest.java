@@ -459,6 +459,26 @@ class MongoOperationValidateTest {
         }
 
         @Test
+        @DisplayName("WHEN delete multi is wrong type THEN validation fails")
+        void deleteMultiWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("delete");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            Map<String, Object> filter = new HashMap<>();
+            filter.put("name", "Test");
+            params.put("filter", filter);
+            params.put("multi", "true");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.multi", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a boolean"));
+        }
+
+        @Test
         @DisplayName("WHEN delete is valid THEN validation passes")
         void deleteValidTest() {
             MongoOperation op = new MongoOperation();
@@ -1075,6 +1095,165 @@ class MongoOperationValidateTest {
             List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(2, errors.size());
+        }
+    }
+
+    @Nested
+    @DisplayName("Unrecognized Keys Tests")
+    class UnrecognizedKeysTests {
+
+        @Test
+        @DisplayName("WHEN insert has unrecognized key THEN validation fails")
+        void insertUnrecognizedKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("insert");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            List<Map<String, Object>> docs = new ArrayList<>();
+            Map<String, Object> doc = new HashMap<>();
+            doc.put("name", "Test");
+            docs.add(doc);
+            params.put("documents", docs);
+            params.put("unknownKey", "value");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.unknownKey", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize parameter 'unknownKey'"));
+        }
+
+        @Test
+        @DisplayName("WHEN update has unrecognized key THEN validation fails")
+        void updateUnrecognizedKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("update");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("filter", new HashMap<>());
+            Map<String, Object> update = new HashMap<>();
+            update.put("$set", new HashMap<>());
+            params.put("update", update);
+            params.put("typoKey", "value");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.typoKey", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize parameter 'typoKey'"));
+        }
+
+        @Test
+        @DisplayName("WHEN delete has unrecognized key THEN validation fails")
+        void deleteUnrecognizedKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("delete");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("filter", new HashMap<>());
+            params.put("unknownKey", "value");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.unknownKey", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize parameter 'unknownKey'"));
+        }
+
+        @Test
+        @DisplayName("WHEN createIndex has unrecognized key THEN validation fails")
+        void createIndexUnrecognizedKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createIndex");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            Map<String, Object> keys = new HashMap<>();
+            keys.put("email", 1);
+            params.put("keys", keys);
+            params.put("badParam", "value");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.badParam", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize parameter 'badParam'"));
+        }
+
+        @Test
+        @DisplayName("WHEN dropIndex has unrecognized key THEN validation fails")
+        void dropIndexUnrecognizedKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("dropIndex");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("indexName", "test_index");
+            params.put("extra", "value");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.extra", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize parameter 'extra'"));
+        }
+
+        @Test
+        @DisplayName("WHEN renameCollection has unrecognized key THEN validation fails")
+        void renameCollectionUnrecognizedKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("renameCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("target", "newName");
+            params.put("badParam", "value");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.badParam", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize parameter 'badParam'"));
+        }
+
+        @Test
+        @DisplayName("WHEN createView has unrecognized key THEN validation fails")
+        void createViewUnrecognizedKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createView");
+            op.setCollection("testView");
+            Map<String, Object> params = new HashMap<>();
+            params.put("viewOn", "sourceCollection");
+            params.put("pipeline", Collections.singletonList(new HashMap<>()));
+            params.put("badParam", "value");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.badParam", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize parameter 'badParam'"));
+        }
+
+        @Test
+        @DisplayName("WHEN modifyCollection has unrecognized key THEN validation fails")
+        void modifyCollectionUnrecognizedKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("modifyCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("validationLevel", "strict");
+            params.put("unknownKey", "value");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.unknownKey", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize parameter 'unknownKey'"));
         }
     }
 }

@@ -19,10 +19,15 @@ import io.flamingock.api.template.TemplatePayloadValidationError;
 import io.flamingock.template.mongodb.model.MongoOperation;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class CreateIndexParametersValidator implements OperationValidator {
+
+    private static final Set<String> RECOGNIZED_KEYS = new HashSet<>(Arrays.asList("keys", "options"));
 
     @Override
     public List<TemplatePayloadValidationError> validate(MongoOperation operation) {
@@ -58,6 +63,8 @@ public class CreateIndexParametersValidator implements OperationValidator {
             errors.add(new TemplatePayloadValidationError("parameters.options",
                     "'options' must be a document"));
         }
+
+        errors.addAll(OperationValidator.checkUnrecognizedKeys(params, RECOGNIZED_KEYS, "CreateIndex"));
 
         return errors;
     }

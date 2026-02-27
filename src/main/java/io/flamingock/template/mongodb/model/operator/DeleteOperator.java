@@ -31,7 +31,24 @@ public class DeleteOperator extends MongoOperator {
     protected void applyInternal(ClientSession clientSession) {
         MongoCollection<Document> collection = mongoDatabase.getCollection(op.getCollection());
         Document filter = op.getFilter();
+        boolean multi = op.isMulti();
 
+        if (multi) {
+            deleteMany(clientSession, collection, filter);
+        } else {
+            deleteOne(clientSession, collection, filter);
+        }
+    }
+
+    private void deleteOne(ClientSession clientSession, MongoCollection<Document> collection, Document filter) {
+        if (clientSession != null) {
+            collection.deleteOne(clientSession, filter);
+        } else {
+            collection.deleteOne(filter);
+        }
+    }
+
+    private void deleteMany(ClientSession clientSession, MongoCollection<Document> collection, Document filter) {
         if (clientSession != null) {
             collection.deleteMany(clientSession, filter);
         } else {
