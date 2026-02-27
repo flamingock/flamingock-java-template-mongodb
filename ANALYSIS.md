@@ -43,17 +43,10 @@ YAML -> MongoOperation (deserialized) -> MongoOperationValidator -> MongoOperati
 **Original issue:** `modifyCollection` used `OperationValidator.NO_OP` in `MongoOperationType`, so none of its three parameters (`validator`, `validationLevel`, `validationAction`) were validated. A user could pass `validationLevel: "banana"` and it would pass validation, only to fail at MongoDB runtime.
 **Resolution:** `ModifyCollectionParametersValidator` now validates at load time: requires at least one recognized parameter, checks `validator` is a document (Map), checks `validationLevel` is one of `off`/`strict`/`moderate`, and checks `validationAction` is one of `error`/`warn`. Multiple errors accumulate. Wired into `MongoOperationType.MODIFY_COLLECTION` replacing the `NO_OP` validator.
 
-### #4 - HIGH: Type-unsafe parameter extraction throughout MongoOperation
-**File:** `MongoOperation.java:46-115`
-**Impact:** Every parameter getter uses `@SuppressWarnings("unchecked")` with raw casts from `Map<String, Object>`. Examples:
-- `getDocuments()` (line 47): `(List<Map<String, Object>>) parameters.get("documents")` - throws `ClassCastException` if YAML has `documents: "not a list"`
-- `getKeys()` (line 54): `(Map<String, Object>) parameters.get("keys")` - same issue
-- `getFilter()` (line 68): same pattern
-- `getUpdate()` (line 108): same pattern
-
-While the validator catches some of these cases, the validator runs only on the apply path (see #1). Additionally, `getOptions()` (line 62) is called by operators but NEVER validated by `MongoOperationValidator` - an unknown key in `options` produces no error.
-**Risk:** `ClassCastException` at runtime with unhelpful stack trace instead of a clear validation error.
-**Fix:** Either add type checking in the getters (return Optional/throw descriptive error), or ensure validation is exhaustive for all parameter access paths.
+### #4 - ~~HIGH: Type-unsafe parameter extraction throughout MongoOperation~~ RESOLVED
+**Status:** Fixed by adding type checks to all parameter validators.
+**Original issue:** Every parameter getter in `MongoOperation` uses `@SuppressWarnings("unchecked")` raw casts from `Map<String, Object>`, risking `ClassCastException` at runtime if YAML contained wrong-typed values. Additionally, `getOptions()` was called by operators but never validated.
+**Resolution:** All parameter validators now include `instanceof` type checks that run at load time via `MongoOperation.validate()` (the `TemplatePayload` contract). Specifically: `UpdateParametersValidator` and `DeleteParametersValidator` check that `filter` is a `Map`; `DropIndexParametersValidator` checks that `keys` is a `Map` and `indexName` is a `String`; and the 5 validators for operations that support options (`InsertParametersValidator`, `UpdateParametersValidator`, `CreateIndexParametersValidator`, `CreateViewParametersValidator`, `RenameCollectionParametersValidator`) check that `options` is a `Map` when present. Since the framework guarantees `validate()` runs before any operator executes, the `@SuppressWarnings("unchecked")` casts in getters are now effectively safe — they can never be reached with wrong-typed data.
 
 ### #5 - HIGH: CreateIndexOperator claims `transactional=true` but ignores the session
 **File:** `CreateIndexOperator.java:28,32-35`

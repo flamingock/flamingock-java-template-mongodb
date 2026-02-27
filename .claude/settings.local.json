@@ -20,7 +20,16 @@
       "WebFetch(domain:docs.flamingock.io)",
       "Bash(wc:*)",
       "Bash(./gradlew test:*)",
-      "Bash(./gradlew spotlessCheck:*)"
+      "Bash(./gradlew spotlessCheck:*)",
+      "Bash(./gradlew spotlessApply:*)",
+      "Bash(git -C /Users/dieppa/workspace/flamingock/library/flamingock-java-template-mongodb status)",
+      "Bash(git -C /Users/dieppa/workspace/flamingock/library/flamingock-java-template-mongodb diff)",
+      "Bash(git -C /Users/dieppa/workspace/flamingock/library/flamingock-java-template-mongodb log --oneline -5)",
+      "Bash(git -C /Users/dieppa/workspace/flamingock/library/flamingock-java-template-mongodb diff --cached -- ANALYSIS.md src/main/java/io/flamingock/template/mongodb/model/MongoOperationType.java src/main/java/io/flamingock/template/mongodb/validation/ModifyCollectionParametersValidator.java src/test/java/io/flamingock/template/mongodb/model/MongoOperationValidateTest.java)",
+      "Bash(git -C /Users/dieppa/workspace/flamingock/library/flamingock-java-template-mongodb reset HEAD .claude/settings.local.json CLAUDE.md)",
+      "Bash(git -C:*)",
+      "Bash(git restore:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

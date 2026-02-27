@@ -29,9 +29,13 @@ public class DeleteParametersValidator implements OperationValidator {
         List<TemplatePayloadValidationError> errors = new ArrayList<>();
         Map<String, Object> params = operation.getParameters();
 
-        if (params == null || !params.containsKey("filter")) {
+        Object filter = params == null ? null : params.get("filter");
+        if (filter == null) {
             errors.add(new TemplatePayloadValidationError("parameters.filter",
                     "Delete operation requires 'filter' parameter"));
+        } else if (!(filter instanceof Map)) {
+            errors.add(new TemplatePayloadValidationError("parameters.filter",
+                    "'filter' must be a document"));
         }
 
         return errors;

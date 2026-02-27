@@ -43,6 +43,16 @@ public class DropIndexParametersValidator implements OperationValidator {
                     "DropIndex operation requires either 'indexName' or 'keys' parameter"));
         }
 
+        if (indexName != null && !(indexName instanceof String)) {
+            errors.add(new TemplatePayloadValidationError("parameters.indexName",
+                    "'indexName' must be a string"));
+        }
+
+        if (keys != null && !(keys instanceof Map)) {
+            errors.add(new TemplatePayloadValidationError("parameters.keys",
+                    "'keys' must be a map"));
+        }
+
         return errors;
     }
 }
