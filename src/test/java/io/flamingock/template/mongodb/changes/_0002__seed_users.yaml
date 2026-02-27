@@ -1,6 +1,6 @@
 id: seed-users
 transactional: true
-template: MongoChangeTemplate
+template: mongodb-sync-template
 targetSystem:
   id: "mongodb"
 steps:

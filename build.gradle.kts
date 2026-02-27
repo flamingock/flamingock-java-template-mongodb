@@ -5,10 +5,10 @@ plugins {
 }
 
 
-val flamingockVersion = "1.1.0-rc.2"
-
 group = "io.flamingock"
-version = "1.0.0-rc.1"
+version = "1.2.0-SNAPSHOT"
+
+val flamingockVersion = "1.2.0-SNAPSHOT"
 
 repositories {
     mavenLocal()

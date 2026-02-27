@@ -18,15 +18,20 @@ package io.flamingock.template.mongodb.model;
 import com.mongodb.client.MongoDatabase;
 import io.flamingock.api.annotations.NonLockGuarded;
 import io.flamingock.api.NonLockGuardedType;
+import io.flamingock.api.template.TemplatePayload;
+import io.flamingock.api.template.TemplatePayloadValidationError;
 import io.flamingock.template.mongodb.model.operator.MongoOperator;
+import io.flamingock.template.mongodb.validation.CollectionValidator;
+import io.flamingock.template.mongodb.validation.TypeValidator;
 import org.bson.Document;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @NonLockGuarded(NonLockGuardedType.NONE)
-public class MongoOperation {
+public class MongoOperation implements TemplatePayload {
     private String type;
     private String collection;
     private Map<String, Object> parameters;
@@ -115,7 +120,7 @@ public class MongoOperation {
     }
 
     public MongoOperator getOperator(MongoDatabase db) {
-        return MongoOperationType.getFromValue(getType()).getOperator(db, this);
+        return MongoOperationType.findByTypeOrThrow(getType()).getOperator(db, this);
     }
 
     @Override
@@ -126,5 +131,26 @@ public class MongoOperation {
         sb.append(", parameters=").append(parameters);
         sb.append('}');
         return sb.toString();
+    }
+
+    private static final TypeValidator TYPE_VALIDATOR = new TypeValidator();
+    private static final CollectionValidator COLLECTION_VALIDATOR = new CollectionValidator();
+
+    @Override
+    public List<TemplatePayloadValidationError> validate() {
+
+        List<TemplatePayloadValidationError> typeErrors = TYPE_VALIDATOR.validate(this);
+        List<TemplatePayloadValidationError> errors = new ArrayList<>(typeErrors);
+        if (!typeErrors.isEmpty()) {
+            return errors;
+        }
+
+        //we know it won't throw any exception because we validate the type through TYPE_VALIDATOR
+        MongoOperationType operationType = MongoOperationType.findByTypeOrThrow(type);
+
+        errors.addAll(COLLECTION_VALIDATOR.validate(this));
+        errors.addAll(operationType.getOperationValidator().validate(this));
+
+        return errors;
     }
 }

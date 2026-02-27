@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.flamingock.template.mongodb.validation;
+package io.flamingock.template.mongodb.model;
 
-import io.flamingock.template.mongodb.model.MongoOperation;
+import io.flamingock.api.template.TemplatePayloadValidationError;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -25,22 +25,11 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class MongoOperationValidatorTest {
-
-    private static final String ENTITY_ID = "test-change";
+class MongoOperationValidateTest {
 
     @Nested
     @DisplayName("Common Validation Tests")
     class CommonValidationTests {
-
-        @Test
-        @DisplayName("WHEN operation is null THEN validation fails")
-        void nullOperationTest() {
-            List<ValidationError> errors = MongoOperationValidator.validate(null, ENTITY_ID);
-
-            assertEquals(1, errors.size());
-            assertTrue(errors.get(0).getMessage().contains("cannot be null"));
-        }
 
         @Test
         @DisplayName("WHEN operation type is null THEN validation fails")
@@ -49,9 +38,10 @@ class MongoOperationValidatorTest {
             op.setType(null);
             op.setCollection("test");
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("type", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("type is required"));
         }
 
@@ -62,9 +52,10 @@ class MongoOperationValidatorTest {
             op.setType("");
             op.setCollection("test");
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("type", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("type is required"));
         }
 
@@ -75,9 +66,10 @@ class MongoOperationValidatorTest {
             op.setType("unknownType");
             op.setCollection("test");
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("type", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("Unknown operation type"));
         }
 
@@ -88,9 +80,10 @@ class MongoOperationValidatorTest {
             op.setType("createCollection");
             op.setCollection(null);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("collection", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("Collection name is required"));
         }
 
@@ -101,9 +94,10 @@ class MongoOperationValidatorTest {
             op.setType("createCollection");
             op.setCollection("");
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("collection", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("cannot be empty"));
         }
 
@@ -114,9 +108,10 @@ class MongoOperationValidatorTest {
             op.setType("createCollection");
             op.setCollection("test$collection");
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("collection", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("cannot contain '$'"));
         }
 
@@ -127,16 +122,17 @@ class MongoOperationValidatorTest {
             op.setType("createCollection");
             op.setCollection("test\0collection");
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("collection", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("null character"));
         }
     }
 
     @Nested
-    @DisplayName("Insert Operation Tests")
-    class InsertOperationTests {
+    @DisplayName("Insert Validation Tests")
+    class InsertValidationTests {
 
         @Test
         @DisplayName("WHEN insert missing parameters THEN validation fails")
@@ -146,9 +142,10 @@ class MongoOperationValidatorTest {
             op.setCollection("test");
             op.setParameters(null);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'parameters'"));
         }
 
@@ -160,9 +157,10 @@ class MongoOperationValidatorTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.documents", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'documents'"));
         }
 
@@ -176,9 +174,10 @@ class MongoOperationValidatorTest {
             params.put("documents", new ArrayList<>());
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.documents", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("cannot be empty"));
         }
 
@@ -194,9 +193,10 @@ class MongoOperationValidatorTest {
             params.put("documents", docs);
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertTrue(errors.get(0).getField().contains("parameters.documents"));
             assertTrue(errors.get(0).getMessage().contains("index 0 is null"));
         }
 
@@ -210,9 +210,10 @@ class MongoOperationValidatorTest {
             params.put("documents", "not a list");
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.documents", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("must be a list"));
         }
 
@@ -230,15 +231,15 @@ class MongoOperationValidatorTest {
             params.put("documents", docs);
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
     }
 
     @Nested
-    @DisplayName("Update Operation Tests")
-    class UpdateOperationTests {
+    @DisplayName("Update Validation Tests")
+    class UpdateValidationTests {
 
         @Test
         @DisplayName("WHEN update missing parameters THEN validation fails")
@@ -248,9 +249,10 @@ class MongoOperationValidatorTest {
             op.setCollection("test");
             op.setParameters(null);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'parameters'"));
         }
 
@@ -266,9 +268,10 @@ class MongoOperationValidatorTest {
             params.put("update", update);
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.filter", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'filter'"));
         }
 
@@ -282,9 +285,10 @@ class MongoOperationValidatorTest {
             params.put("filter", new HashMap<>());
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.update", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'update'"));
         }
 
@@ -299,9 +303,10 @@ class MongoOperationValidatorTest {
             params.put("update", "not a document");
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.update", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("must be a document"));
         }
 
@@ -313,7 +318,7 @@ class MongoOperationValidatorTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(2, errors.size());
         }
@@ -333,34 +338,15 @@ class MongoOperationValidatorTest {
             params.put("update", update);
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
-
-            assertTrue(errors.isEmpty());
-        }
-
-        @Test
-        @DisplayName("WHEN update with multi option is valid THEN validation passes")
-        void updateWithMultiValidTest() {
-            MongoOperation op = new MongoOperation();
-            op.setType("update");
-            op.setCollection("test");
-            Map<String, Object> params = new HashMap<>();
-            params.put("filter", new HashMap<>());
-            Map<String, Object> update = new HashMap<>();
-            update.put("$set", new HashMap<>());
-            params.put("update", update);
-            params.put("multi", true);
-            op.setParameters(params);
-
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
     }
 
     @Nested
-    @DisplayName("Delete Operation Tests")
-    class DeleteOperationTests {
+    @DisplayName("Delete Validation Tests")
+    class DeleteValidationTests {
 
         @Test
         @DisplayName("WHEN delete missing filter THEN validation fails")
@@ -370,9 +356,10 @@ class MongoOperationValidatorTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.filter", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'filter'"));
         }
 
@@ -386,7 +373,7 @@ class MongoOperationValidatorTest {
             params.put("filter", new HashMap<>());
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
@@ -403,15 +390,15 @@ class MongoOperationValidatorTest {
             params.put("filter", filter);
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
     }
 
     @Nested
-    @DisplayName("CreateIndex Operation Tests")
-    class CreateIndexOperationTests {
+    @DisplayName("CreateIndex Validation Tests")
+    class CreateIndexValidationTests {
 
         @Test
         @DisplayName("WHEN createIndex missing parameters THEN validation fails")
@@ -421,9 +408,10 @@ class MongoOperationValidatorTest {
             op.setCollection("test");
             op.setParameters(null);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'parameters'"));
         }
 
@@ -435,9 +423,10 @@ class MongoOperationValidatorTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.keys", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'keys'"));
         }
 
@@ -451,9 +440,10 @@ class MongoOperationValidatorTest {
             params.put("keys", new HashMap<>());
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.keys", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("cannot be empty"));
         }
 
@@ -467,9 +457,10 @@ class MongoOperationValidatorTest {
             params.put("keys", "not a map");
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.keys", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("must be a map"));
         }
 
@@ -485,15 +476,15 @@ class MongoOperationValidatorTest {
             params.put("keys", keys);
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
     }
 
     @Nested
-    @DisplayName("DropIndex Operation Tests")
-    class DropIndexOperationTests {
+    @DisplayName("DropIndex Validation Tests")
+    class DropIndexValidationTests {
 
         @Test
         @DisplayName("WHEN dropIndex missing both indexName and keys THEN validation fails")
@@ -503,7 +494,7 @@ class MongoOperationValidatorTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
             assertTrue(errors.get(0).getMessage().contains("'indexName' or 'keys'"));
@@ -519,7 +510,7 @@ class MongoOperationValidatorTest {
             params.put("indexName", "email_index");
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
@@ -536,15 +527,15 @@ class MongoOperationValidatorTest {
             params.put("keys", keys);
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
     }
 
     @Nested
-    @DisplayName("RenameCollection Operation Tests")
-    class RenameCollectionOperationTests {
+    @DisplayName("RenameCollection Validation Tests")
+    class RenameCollectionValidationTests {
 
         @Test
         @DisplayName("WHEN renameCollection missing target THEN validation fails")
@@ -554,9 +545,10 @@ class MongoOperationValidatorTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.target", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'target'"));
         }
 
@@ -570,9 +562,10 @@ class MongoOperationValidatorTest {
             params.put("target", "");
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.target", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("cannot be null or empty"));
         }
 
@@ -586,15 +579,15 @@ class MongoOperationValidatorTest {
             params.put("target", "newName");
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
     }
 
     @Nested
-    @DisplayName("CreateView Operation Tests")
-    class CreateViewOperationTests {
+    @DisplayName("CreateView Validation Tests")
+    class CreateViewValidationTests {
 
         @Test
         @DisplayName("WHEN createView missing parameters THEN validation fails")
@@ -604,9 +597,10 @@ class MongoOperationValidatorTest {
             op.setCollection("testView");
             op.setParameters(null);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'parameters'"));
         }
 
@@ -620,9 +614,10 @@ class MongoOperationValidatorTest {
             params.put("pipeline", Collections.singletonList(new HashMap<>()));
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.viewOn", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'viewOn'"));
         }
 
@@ -636,9 +631,10 @@ class MongoOperationValidatorTest {
             params.put("viewOn", "sourceCollection");
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.pipeline", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'pipeline'"));
         }
 
@@ -653,9 +649,10 @@ class MongoOperationValidatorTest {
             params.put("pipeline", "not a list");
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertEquals(1, errors.size());
+            assertEquals("parameters.pipeline", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("must be a list"));
         }
 
@@ -670,15 +667,15 @@ class MongoOperationValidatorTest {
             params.put("pipeline", Collections.singletonList(new HashMap<>()));
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
     }
 
     @Nested
-    @DisplayName("Simple Operation Tests")
-    class SimpleOperationTests {
+    @DisplayName("Simple Operation Validation Tests")
+    class SimpleOperationValidationTests {
 
         @Test
         @DisplayName("WHEN createCollection is valid THEN validation passes")
@@ -687,7 +684,7 @@ class MongoOperationValidatorTest {
             op.setType("createCollection");
             op.setCollection("test");
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
@@ -699,7 +696,7 @@ class MongoOperationValidatorTest {
             op.setType("dropCollection");
             op.setCollection("test");
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
@@ -711,7 +708,19 @@ class MongoOperationValidatorTest {
             op.setType("dropView");
             op.setCollection("testView");
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertTrue(errors.isEmpty());
+        }
+
+        @Test
+        @DisplayName("WHEN modifyCollection is valid THEN validation passes")
+        void modifyCollectionValidTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("modifyCollection");
+            op.setCollection("test");
+
+            List<TemplatePayloadValidationError> errors = op.validate();
 
             assertTrue(errors.isEmpty());
         }
@@ -731,9 +740,9 @@ class MongoOperationValidatorTest {
             params.put("documents", new ArrayList<>());
             op.setParameters(params);
 
-            List<ValidationError> errors = MongoOperationValidator.validate(op, ENTITY_ID);
+            List<TemplatePayloadValidationError> errors = op.validate();
 
-            assertEquals(2, errors.size()); // collection contains $ and documents is empty
+            assertEquals(2, errors.size());
         }
     }
 }

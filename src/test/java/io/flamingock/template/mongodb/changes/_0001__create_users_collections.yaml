@@ -1,6 +1,6 @@
 id: create-users-collection-with-index
 transactional: false
-template: MongoChangeTemplate
+template: mongodb-sync-template
 targetSystem:
   id: "mongodb"
 steps:
