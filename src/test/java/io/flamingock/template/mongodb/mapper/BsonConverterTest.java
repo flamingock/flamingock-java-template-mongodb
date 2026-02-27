@@ -56,12 +56,39 @@ class BsonConverterTest {
         }
 
         @Test
+        @DisplayName("WHEN value is empty String THEN returns empty BsonString")
+        void toBsonValueEmptyStringTest() {
+            BsonValue result = BsonConverter.toBsonValue("");
+
+            assertInstanceOf(BsonString.class, result);
+            assertEquals("", ((BsonString) result).getValue());
+        }
+
+        @Test
         @DisplayName("WHEN value is Integer THEN returns BsonInt32")
         void toBsonValueIntegerTest() {
             BsonValue result = BsonConverter.toBsonValue(42);
 
             assertInstanceOf(BsonInt32.class, result);
             assertEquals(42, ((BsonInt32) result).getValue());
+        }
+
+        @Test
+        @DisplayName("WHEN value is Integer zero THEN returns BsonInt32 zero")
+        void toBsonValueIntegerZeroTest() {
+            BsonValue result = BsonConverter.toBsonValue(0);
+
+            assertInstanceOf(BsonInt32.class, result);
+            assertEquals(0, ((BsonInt32) result).getValue());
+        }
+
+        @Test
+        @DisplayName("WHEN value is negative Integer THEN returns negative BsonInt32")
+        void toBsonValueNegativeIntegerTest() {
+            BsonValue result = BsonConverter.toBsonValue(-1);
+
+            assertInstanceOf(BsonInt32.class, result);
+            assertEquals(-1, ((BsonInt32) result).getValue());
         }
 
         @Test
@@ -74,6 +101,15 @@ class BsonConverterTest {
         }
 
         @Test
+        @DisplayName("WHEN value is negative Long THEN returns negative BsonInt64")
+        void toBsonValueNegativeLongTest() {
+            BsonValue result = BsonConverter.toBsonValue(-100L);
+
+            assertInstanceOf(BsonInt64.class, result);
+            assertEquals(-100L, ((BsonInt64) result).getValue());
+        }
+
+        @Test
         @DisplayName("WHEN value is Double THEN returns BsonDouble")
         void toBsonValueDoubleTest() {
             BsonValue result = BsonConverter.toBsonValue(3.14);
@@ -83,12 +119,39 @@ class BsonConverterTest {
         }
 
         @Test
-        @DisplayName("WHEN value is Boolean THEN returns BsonBoolean")
-        void toBsonValueBooleanTest() {
+        @DisplayName("WHEN value is Double zero THEN returns BsonDouble zero")
+        void toBsonValueDoubleZeroTest() {
+            BsonValue result = BsonConverter.toBsonValue(0.0);
+
+            assertInstanceOf(BsonDouble.class, result);
+            assertEquals(0.0, ((BsonDouble) result).getValue(), 0.001);
+        }
+
+        @Test
+        @DisplayName("WHEN value is negative Double THEN returns negative BsonDouble")
+        void toBsonValueNegativeDoubleTest() {
+            BsonValue result = BsonConverter.toBsonValue(-2.5);
+
+            assertInstanceOf(BsonDouble.class, result);
+            assertEquals(-2.5, ((BsonDouble) result).getValue(), 0.001);
+        }
+
+        @Test
+        @DisplayName("WHEN value is Boolean true THEN returns BsonBoolean true")
+        void toBsonValueBooleanTrueTest() {
             BsonValue result = BsonConverter.toBsonValue(true);
 
             assertInstanceOf(BsonBoolean.class, result);
             assertTrue(((BsonBoolean) result).getValue());
+        }
+
+        @Test
+        @DisplayName("WHEN value is Boolean false THEN returns BsonBoolean false")
+        void toBsonValueBooleanFalseTest() {
+            BsonValue result = BsonConverter.toBsonValue(false);
+
+            assertInstanceOf(BsonBoolean.class, result);
+            assertFalse(((BsonBoolean) result).getValue());
         }
 
         @Test
@@ -119,6 +182,32 @@ class BsonConverterTest {
             assertEquals("item1", array.get(0).asString().getValue());
             assertEquals(42, array.get(1).asInt32().getValue());
             assertTrue(array.get(2).asBoolean().getValue());
+        }
+
+        @Test
+        @DisplayName("WHEN value is empty Map THEN returns empty BsonDocument")
+        void toBsonValueEmptyMapTest() {
+            BsonValue result = BsonConverter.toBsonValue(new HashMap<>());
+
+            assertInstanceOf(BsonDocument.class, result);
+            assertTrue(((BsonDocument) result).isEmpty());
+        }
+
+        @Test
+        @DisplayName("WHEN value is empty List THEN returns empty BsonArray")
+        void toBsonValueEmptyListTest() {
+            BsonValue result = BsonConverter.toBsonValue(Collections.emptyList());
+
+            assertInstanceOf(BsonArray.class, result);
+            assertTrue(((BsonArray) result).isEmpty());
+        }
+
+        @Test
+        @DisplayName("WHEN value is Float THEN throws IllegalArgumentException")
+        void toBsonValueFloatUnsupportedTest() {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                    BsonConverter.toBsonValue(1.5f));
+            assertTrue(ex.getMessage().contains("Float"));
         }
 
         @Test
@@ -221,6 +310,66 @@ class BsonConverterTest {
 
             assertTrue(result.get("nullField").isNull());
             assertEquals("value", result.getString("stringField").getValue());
+        }
+
+        @Test
+        @DisplayName("WHEN map is empty THEN returns empty BsonDocument")
+        void toBsonDocumentEmptyTest() {
+            BsonDocument result = BsonConverter.toBsonDocument(new HashMap<>());
+
+            assertNotNull(result);
+            assertTrue(result.isEmpty());
+        }
+
+        @Test
+        @DisplayName("WHEN map has deep nesting THEN converts recursively")
+        void toBsonDocumentDeepNestingTest() {
+            Map<String, Object> level3 = new HashMap<>();
+            level3.put("value", 42);
+
+            List<Object> level2List = Arrays.asList(level3, "text");
+
+            Map<String, Object> level1 = new HashMap<>();
+            level1.put("items", level2List);
+
+            Map<String, Object> root = new HashMap<>();
+            root.put("nested", level1);
+
+            BsonDocument result = BsonConverter.toBsonDocument(root);
+
+            BsonDocument nestedDoc = result.getDocument("nested");
+            BsonArray items = nestedDoc.getArray("items");
+            assertEquals(2, items.size());
+            assertEquals(42, items.get(0).asDocument().getInt32("value").getValue());
+            assertEquals("text", items.get(1).asString().getValue());
+        }
+
+        @Test
+        @DisplayName("WHEN map has all supported types THEN converts all correctly")
+        void toBsonDocumentAllTypesTest() {
+            Map<String, Object> map = new HashMap<>();
+            map.put("string", "text");
+            map.put("int", 1);
+            map.put("long", 2L);
+            map.put("double", 3.0);
+            map.put("bool", true);
+            map.put("null", null);
+            map.put("list", Arrays.asList(1, 2));
+            Map<String, Object> inner = new HashMap<>();
+            inner.put("key", "val");
+            map.put("map", inner);
+
+            BsonDocument result = BsonConverter.toBsonDocument(map);
+
+            assertEquals(8, result.size());
+            assertInstanceOf(BsonString.class, result.get("string"));
+            assertInstanceOf(BsonInt32.class, result.get("int"));
+            assertInstanceOf(BsonInt64.class, result.get("long"));
+            assertInstanceOf(BsonDouble.class, result.get("double"));
+            assertInstanceOf(BsonBoolean.class, result.get("bool"));
+            assertTrue(result.get("null").isNull());
+            assertInstanceOf(BsonArray.class, result.get("list"));
+            assertInstanceOf(BsonDocument.class, result.get("map"));
         }
     }
 }
