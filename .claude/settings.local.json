@@ -30,7 +30,11 @@
       "Bash(git -C:*)",
       "Bash(git restore:*)",
       "Bash(git commit:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(done)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(xargs:*)"
     ]
   }
 }
