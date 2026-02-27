@@ -205,6 +205,11 @@ See `ANALYSIS.md` for a detailed quality assessment. Key issues:
 5. **CreateIndexOperator claims transactional but ignores session** — misleading behavior
 6. **Collation mapping broken for YAML input** — `MapperUtil.getCollation()` expects `Collation` object, gets `Map`
 
+## Commit Message Convention
+
+All commits must follow [Conventional Commits](https://www.conventionalcommits.org/) with a well-structured body suitable for changelog extraction from `git log`.
+DON'T add Claude as co-author
+
 ## Terminology
 
 - Use "**changes**", not "migrations"
