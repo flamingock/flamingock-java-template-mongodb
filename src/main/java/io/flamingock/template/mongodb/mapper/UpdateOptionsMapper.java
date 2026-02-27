@@ -49,7 +49,7 @@ public final class UpdateOptionsMapper {
                     if (filter instanceof Map) {
                         @SuppressWarnings("unchecked")
                         Map<String, Object> filterMap = (Map<String, Object>) filter;
-                        bsonFilters.add(MapperUtil.toBsonDocument(filterMap));
+                        bsonFilters.add(BsonConverter.toBsonDocument(filterMap));
                     } else if (filter instanceof org.bson.conversions.Bson) {
                         bsonFilters.add((org.bson.conversions.Bson) filter);
                     }

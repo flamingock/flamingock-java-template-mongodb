@@ -20,6 +20,11 @@ import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.CreateViewOptions;
 import io.flamingock.template.mongodb.mapper.CreateViewOptionsMapper;
 import io.flamingock.template.mongodb.model.MongoOperation;
+import org.bson.Document;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class CreateViewOperator extends MongoOperator {
 
@@ -30,6 +35,18 @@ public class CreateViewOperator extends MongoOperator {
     @Override
     protected void applyInternal(ClientSession clientSession) {
         CreateViewOptions options = CreateViewOptionsMapper.map(op.getOptions());
-        mongoDatabase.createView(op.getCollection(), op.getViewOn(), op.getPipeline(), options);
+        mongoDatabase.createView(op.getCollection(), getViewOn(), getPipeline(), options);
+    }
+
+    private String getViewOn() {
+        return (String) op.getParameters().get("viewOn");
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Document> getPipeline() {
+        List<Map<String, Object>> rawPipeline = (List<Map<String, Object>>) op.getParameters().get("pipeline");
+        return rawPipeline != null
+                ? rawPipeline.stream().map(Document::new).collect(Collectors.toList())
+                : null;
     }
 }

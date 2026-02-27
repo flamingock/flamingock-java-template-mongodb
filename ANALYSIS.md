@@ -27,7 +27,7 @@ Structural validation runs at **load time** — before any change executes — v
 - `OperationValidator` — Interface for per-operation parameter validators + unrecognized key utility
 - 8 parameter validators (`InsertParametersValidator`, `UpdateParametersValidator`, `DeleteParametersValidator`, `CreateIndexParametersValidator`, `DropIndexParametersValidator`, `RenameCollectionParametersValidator`, `CreateViewParametersValidator`, `ModifyCollectionParametersValidator`)
 - 11 operator classes (`CreateCollectionOperator`, `InsertOperator`, etc.)
-- 6 mapper classes (`IndexOptionsMapper`, `InsertOptionsMapper`, `UpdateOptionsMapper`, `CreateViewOptionsMapper`, `RenameCollectionOptionsMapper`, `MapperUtil`)
+- 7 mapper classes (`IndexOptionsMapper`, `InsertOptionsMapper`, `UpdateOptionsMapper`, `CreateViewOptionsMapper`, `RenameCollectionOptionsMapper`, `MapperUtil`, `BsonConverter`)
 
 ---
 
@@ -227,11 +227,11 @@ All 7 changes from the original analysis have been implemented across multiple P
 - Unrecognized parameter key detection catches typos at load time
 
 ### Negative
-- Heavy code duplication in `InsertOperator` and `UpdateOperator` (4 branches for session x options combinations)
-- `MongoOperation` is a god object — it has getters for every operation type's parameters, even though each getter is only relevant to 1–2 operation types
+- ~~Heavy code duplication in `InsertOperator` and `UpdateOperator`~~ RESOLVED — Flattened nested if/else to single chain; extracted options to local variable to avoid duplicate mapper calls
+- ~~`MongoOperation` is a god object~~ REDUCED — Moved 9 single-use getters to their respective operator classes as private methods. `MongoOperation` retains 4 shared getters (`getOptions`, `getFilter`, `isMulti`, `getKeys`) used by multiple operators
 - No builder pattern or factory for `MongoOperation` in tests — all tests manually construct via setters
-- `MapperUtil` mixes concerns: type extraction + BSON conversion + Collation building in one class
-- Test infrastructure duplication — every integration test class independently sets up MongoDBContainer with identical boilerplate
+- ~~`MapperUtil` mixes concerns: type extraction + BSON conversion + Collation building~~ RESOLVED — Split into `MapperUtil` (parameter extraction + collation) and `BsonConverter` (BSON serialization)
+- ~~Test infrastructure duplication~~ RESOLVED — Extracted `AbstractMongoOperatorTest` base class with shared MongoDBContainer setup; 12 test classes now extend it
 
 ---
 
@@ -244,8 +244,8 @@ All 7 changes from the original analysis have been implemented across multiple P
 | Validation & Error Handling    |   20%    |      9       |     1.80     |
 | Test Coverage                  |   20%    |      6       |     1.20     |
 | Security & Safety              |   10%    |      8       |     0.80     |
-| Code Quality & Maintainability |    5%    |      7       |     0.35     |
-| **Total**                      | **100%** |              | **8.2 / 10** |
+| Code Quality & Maintainability |    5%    |      8       |     0.40     |
+| **Total**                      | **100%** |              | **8.3 / 10** |
 
 ### Score Justification
 
@@ -259,8 +259,8 @@ All 7 changes from the original analysis have been implemented across multiple P
 
 **Security (8/10):** Developer-authored context makes injection-style concerns not applicable. Collection name `$`/`\0` checks serve as guardrails, now applied to both `collection` and `target` parameters. `modifyCollection` parameters are validated against known values. YAML deserialization is delegated to the framework.
 
-**Code Quality (7/10):** Clean code style, good naming, proper license headers. Deductions remain for code duplication in operators (session x options branches), the `MongoOperation` god-object pattern, and test infrastructure boilerplate. These are maintainability concerns, not correctness issues.
+**Code Quality (8/10):** Clean code style, good naming, proper license headers. Four of five code quality negatives have been addressed: operator duplication flattened, `MongoOperation` god-object reduced (9 getters moved to operators), `MapperUtil` split into extraction + BSON conversion, and test boilerplate extracted to `AbstractMongoOperatorTest`. Remaining deduction: no builder/factory for `MongoOperation` in tests, and `MongoOperation` still has 4 shared getters.
 
 ### Bottom Line
 
-The module has **matured significantly** from its initial state. All 10 identified issues have been resolved, the validation architecture was overhauled to leverage framework-level load-time validation, and the test suite grew from ~90 to ~199 tests. The remaining gaps are in integration-level testing (transactional paths, options end-to-end) and code-level cleanup (operator duplication, god-object pattern). The module is **ready for production use** with the understanding that transactional behavior is covered by the framework's integration test suite.
+The module has **matured significantly** from its initial state. All 10 identified issues have been resolved, the validation architecture was overhauled to leverage framework-level load-time validation, and the test suite grew from ~90 to ~199 tests. Code quality improvements addressed 4 of 5 negatives: operator duplication flattened, god-object reduced, `MapperUtil` concerns separated, and test boilerplate extracted. The remaining gaps are in integration-level testing (transactional paths, options end-to-end). The module is **ready for production use** with the understanding that transactional behavior is covered by the framework's integration test suite.

@@ -27,11 +27,16 @@ public class DropIndexOperator extends MongoOperator {
 
     @Override
     protected void applyInternal(ClientSession clientSession) {
-        String indexName = op.getIndexName();
+        String indexName = getIndexName();
         if (indexName != null) {
             mongoDatabase.getCollection(op.getCollection()).dropIndex(indexName);
         } else {
             mongoDatabase.getCollection(op.getCollection()).dropIndex(op.getKeys());
         }
+    }
+
+    private String getIndexName() {
+        Object value = op.getParameters().get("indexName");
+        return value != null ? (String) value : null;
     }
 }

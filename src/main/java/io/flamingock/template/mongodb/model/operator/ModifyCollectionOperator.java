@@ -20,6 +20,8 @@ import com.mongodb.client.MongoDatabase;
 import io.flamingock.template.mongodb.model.MongoOperation;
 import org.bson.Document;
 
+import java.util.Map;
+
 public class ModifyCollectionOperator extends MongoOperator {
 
     public ModifyCollectionOperator(MongoDatabase mongoDatabase, MongoOperation operation) {
@@ -29,15 +31,29 @@ public class ModifyCollectionOperator extends MongoOperator {
     @Override
     protected void applyInternal(ClientSession clientSession) {
         Document command = new Document("collMod", op.getCollection());
-        if (op.getValidator() != null) {
-            command.append("validator", op.getValidator());
+        if (getValidator() != null) {
+            command.append("validator", getValidator());
         }
-        if (op.getValidationLevel() != null) {
-            command.append("validationLevel", op.getValidationLevel());
+        if (getValidationLevel() != null) {
+            command.append("validationLevel", getValidationLevel());
         }
-        if (op.getValidationAction() != null) {
-            command.append("validationAction", op.getValidationAction());
+        if (getValidationAction() != null) {
+            command.append("validationAction", getValidationAction());
         }
         mongoDatabase.runCommand(command);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Document getValidator() {
+        Object value = op.getParameters().get("validator");
+        return value != null ? new Document((Map<String, Object>) value) : null;
+    }
+
+    private String getValidationLevel() {
+        return (String) op.getParameters().get("validationLevel");
+    }
+
+    private String getValidationAction() {
+        return (String) op.getParameters().get("validationAction");
     }
 }
