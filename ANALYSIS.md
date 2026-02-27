@@ -33,10 +33,10 @@ YAML -> MongoOperation (deserialized) -> MongoOperationValidator -> MongoOperati
 **Original issue:** `MongoChangeTemplate.rollback()` did not call `MongoOperationValidator.validate()` before executing, so malformed rollback YAML ran unchecked.
 **Resolution:** Structural validation was moved into `MongoOperation.validate()` (implementing the `TemplatePayload` interface). The Flamingock framework now calls `validate()` on both apply and rollback payloads at load time via `AbstractTemplateLoadedChange.getValidationErrors()`, which invokes `validateApplyPayload()` and `validateRollbackPayload()` before any change executes. The separate `MongoOperationValidator`, `ValidationError`, and `MongoTemplateValidationException` classes were deleted as part of this refactoring. Validation is no longer a responsibility of the template's `apply()`/`rollback()` methods — the framework handles it uniformly for all payloads.
 
-### #2 - HIGH: InsertOperator silently swallows null/empty documents, bypassing validation
-**File:** `InsertOperator.java:37-39`
-**Impact:** The validator correctly rejects empty/null documents (`MongoOperationValidator.java:268-271`), but `InsertOperator.applyInternal()` has a redundant guard: `if(op.getDocuments() == null || op.getDocuments().isEmpty()) { return; }`. If the validator is ever bypassed (e.g., rollback path per issue #1, or direct operator usage), the insert silently does nothing. A migration that is supposed to seed data will silently succeed without inserting anything - an invisible data loss scenario.
-**Fix:** Remove the silent return. Let the operator trust the validator. If documents are null/empty at this point, it's a bug that should throw, not be silenced.
+### #2 - ~~HIGH: InsertOperator silently swallows null/empty documents, bypassing validation~~ RESOLVED
+**Status:** Fixed by removing the silent guard.
+**Original issue:** `InsertOperator.applyInternal()` had a redundant guard `if(op.getDocuments() == null || op.getDocuments().isEmpty()) { return; }` that silently did nothing instead of failing when documents were missing.
+**Resolution:** The silent guard was removed from `InsertOperator.applyInternal()`. Structural validation now runs at load time via `InsertParametersValidator` (called from `MongoOperation.validate()`), which catches null, empty, and malformed documents before any change executes. The operator no longer needs a defensive check — if documents are invalid, the framework rejects the change at load time.
 
 ### #3 - HIGH: `modifyCollection` has ZERO parameter validation
 **File:** `MongoOperationValidator.java:239-240`

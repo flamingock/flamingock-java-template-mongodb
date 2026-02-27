@@ -23,6 +23,7 @@ import com.mongodb.client.MongoDatabase;
 import io.flamingock.template.mongodb.model.MongoOperation;
 import io.flamingock.template.mongodb.model.operator.InsertOperator;
 import org.bson.Document;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -144,10 +145,8 @@ class InsertOperatorTest {
     }
 
     @Test
-    @DisplayName("WHEN insert operator is applied with empty documents THEN nothing is inserted")
+    @DisplayName("WHEN insert operator is applied with empty documents THEN exception is thrown")
     void insertEmptyDocumentsTest() {
-        assertEquals(0, getDocumentCount(), "Collection should be empty before insert");
-
         MongoOperation operation = new MongoOperation();
         operation.setType("insert");
         operation.setCollection(COLLECTION_NAME);
@@ -157,9 +156,9 @@ class InsertOperatorTest {
         operation.setParameters(params);
 
         InsertOperator operator = new InsertOperator(mongoDatabase, operation);
-        operator.apply(null);
-
-        assertEquals(0, getDocumentCount(), "Collection should still be empty");
+        // Empty documents should be caught by InsertParametersValidator at load time.
+        // If the operator is called directly with empty documents, the MongoDB driver throws.
+        Assertions.assertThrows(IllegalArgumentException.class, () -> operator.apply(null));
     }
 
     private long getDocumentCount() {
