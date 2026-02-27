@@ -25,13 +25,13 @@ public class CreateIndexOperator extends MongoOperator {
 
 
     public CreateIndexOperator(MongoDatabase mongoDatabase, MongoOperation operation) {
-        super(mongoDatabase, operation, true);
+        super(mongoDatabase, operation, false);
     }
 
     @Override
     protected void applyInternal(ClientSession clientSession) {
         if (clientSession != null) {
-            logger.warn("MongoDB does not support transactions for createCollection operation. Ignoring transactional flag.");
+            logger.warn("MongoDB does not support transactions for createIndex operation. Ignoring transactional flag.");
         }
         IndexOptions indexOptions = IndexOptionsMapper.mapToIndexOptions(op.getOptions());
         mongoDatabase.getCollection(op.getCollection())

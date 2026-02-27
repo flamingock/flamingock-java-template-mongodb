@@ -48,11 +48,10 @@ YAML -> MongoOperation (deserialized) -> MongoOperationValidator -> MongoOperati
 **Original issue:** Every parameter getter in `MongoOperation` uses `@SuppressWarnings("unchecked")` raw casts from `Map<String, Object>`, risking `ClassCastException` at runtime if YAML contained wrong-typed values. Additionally, `getOptions()` was called by operators but never validated.
 **Resolution:** All parameter validators now include `instanceof` type checks that run at load time via `MongoOperation.validate()` (the `TemplatePayload` contract). Specifically: `UpdateParametersValidator` and `DeleteParametersValidator` check that `filter` is a `Map`; `DropIndexParametersValidator` checks that `keys` is a `Map` and `indexName` is a `String`; and the 5 validators for operations that support options (`InsertParametersValidator`, `UpdateParametersValidator`, `CreateIndexParametersValidator`, `CreateViewParametersValidator`, `RenameCollectionParametersValidator`) check that `options` is a `Map` when present. Since the framework guarantees `validate()` runs before any operator executes, the `@SuppressWarnings("unchecked")` casts in getters are now effectively safe — they can never be reached with wrong-typed data.
 
-### #5 - HIGH: CreateIndexOperator claims `transactional=true` but ignores the session
-**File:** `CreateIndexOperator.java:28,32-35`
-**Impact:** Constructor passes `super(mongoDatabase, operation, true)`, declaring itself transactional. But `applyInternal()` at line 33-35 warns `"MongoDB does not support transactions for createCollection operation"` (note: wrong operation name in the message - says "createCollection" instead of "createIndex") and then proceeds to ignore the `clientSession` entirely. The base class `MongoOperator.logOperation()` at line 46-48 will say "Applying transactional operation with transaction" when a session is present, which is misleading since the session is not actually used.
-**Risk:** Users think index creation is transactional when it is not. If a multi-step change fails after `createIndex`, the framework may expect the transaction to roll it back, but it was never part of the transaction.
-**Fix:** Change to `super(mongoDatabase, operation, false)`. Fix the warning message to say "createIndex" instead of "createCollection".
+### #5 - ~~HIGH: CreateIndexOperator claims `transactional=true` but ignores the session~~ RESOLVED
+**Status:** Fixed by correcting the transactional flag and warning message.
+**Original issue:** Constructor passed `super(mongoDatabase, operation, true)`, declaring itself transactional. But `applyInternal()` warned about "createCollection operation" (copy-paste error — should say "createIndex") and then ignored the `clientSession` entirely. MongoDB index operations are DDL and do not participate in transactions, so the flag was incorrect.
+**Resolution:** Changed constructor to `super(mongoDatabase, operation, false)` to match all other DDL operators. Fixed the warning message from "createCollection operation" to "createIndex operation".
 
 ### #6 - MEDIUM: DropIndexOperator completely ignores ClientSession
 **File:** `DropIndexOperator.java:29-35`
@@ -92,7 +91,7 @@ YAML -> MongoOperation (deserialized) -> MongoOperationValidator -> MongoOperati
 | insert | `INSERT` | `InsertOperator` | Yes | Full (documents) | `InsertOptionsMapper` | Full | `InsertOperatorTest` (3 tests) | YAML `_0002`, `_0003`, `_0005` |
 | update | `UPDATE` | `UpdateOperator` | Yes | Full (filter, update) | `UpdateOptionsMapper` | Full | `UpdateOperatorTest` (1 test) | None |
 | delete | `DELETE` | `DeleteOperator` | Yes | filter required | None | Full | `DeleteOperatorTest` (1 test) | YAML `_0002` rollback |
-| createIndex | `CREATE_INDEX` | `CreateIndexOperator` | **Yes (wrong)** | Full (keys) | `IndexOptionsMapper` | **Warns & ignores** | `CreateIndexOperatorTest` (1 test) | YAML `_0003`, `_0005` |
+| createIndex | `CREATE_INDEX` | `CreateIndexOperator` | No | Full (keys) | `IndexOptionsMapper` | Warns & ignores | `CreateIndexOperatorTest` (1 test) | YAML `_0003`, `_0005` |
 | dropIndex | `DROP_INDEX` | `DropIndexOperator` | No | indexName or keys | None | **Ignores entirely** | `DropIndexOperatorTest` (1 test) | YAML `_0005` rollback |
 | renameCollection | `RENAME_COLLECTION` | `RenameCollectionOperator` | No | target required | `RenameCollectionOptionsMapper` | Ignores entirely | `RenameCollectionOperatorTest` (1 test) | None |
 | modifyCollection | `MODIFY_COLLECTION` | `ModifyCollectionOperator` | No | Full (validator, validationLevel, validationAction) | None | Ignores entirely | `ModifyCollectionOperatorTest` (1 test) | None |
