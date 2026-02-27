@@ -41,6 +41,12 @@ public class RenameCollectionParametersValidator implements OperationValidator {
                     "'target' cannot be null or empty"));
         }
 
+        Object options = params.get("options");
+        if (options != null && !(options instanceof Map)) {
+            errors.add(new TemplatePayloadValidationError("parameters.options",
+                    "'options' must be a document"));
+        }
+
         return errors;
     }
 }
