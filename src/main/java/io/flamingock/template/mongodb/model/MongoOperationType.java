@@ -33,6 +33,7 @@ import io.flamingock.template.mongodb.validation.CreateViewParametersValidator;
 import io.flamingock.template.mongodb.validation.DeleteParametersValidator;
 import io.flamingock.template.mongodb.validation.DropIndexParametersValidator;
 import io.flamingock.template.mongodb.validation.InsertParametersValidator;
+import io.flamingock.template.mongodb.validation.ModifyCollectionParametersValidator;
 import io.flamingock.template.mongodb.validation.OperationValidator;
 import io.flamingock.template.mongodb.validation.RenameCollectionParametersValidator;
 import io.flamingock.template.mongodb.validation.UpdateParametersValidator;
@@ -51,7 +52,7 @@ public enum MongoOperationType {
     DROP_COLLECTION("dropCollection", DropCollectionOperator::new, OperationValidator.NO_OP),
     DROP_INDEX("dropIndex", DropIndexOperator::new, new DropIndexParametersValidator()),
     RENAME_COLLECTION("renameCollection", RenameCollectionOperator::new, new RenameCollectionParametersValidator()),
-    MODIFY_COLLECTION("modifyCollection", ModifyCollectionOperator::new, OperationValidator.NO_OP),
+    MODIFY_COLLECTION("modifyCollection", ModifyCollectionOperator::new, new ModifyCollectionParametersValidator()),
     CREATE_VIEW("createView", CreateViewOperator::new, new CreateViewParametersValidator()),
     DROP_VIEW("dropView", DropViewOperator::new, OperationValidator.NO_OP);
 

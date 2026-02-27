@@ -38,11 +38,10 @@ YAML -> MongoOperation (deserialized) -> MongoOperationValidator -> MongoOperati
 **Original issue:** `InsertOperator.applyInternal()` had a redundant guard `if(op.getDocuments() == null || op.getDocuments().isEmpty()) { return; }` that silently did nothing instead of failing when documents were missing.
 **Resolution:** The silent guard was removed from `InsertOperator.applyInternal()`. Structural validation now runs at load time via `InsertParametersValidator` (called from `MongoOperation.validate()`), which catches null, empty, and malformed documents before any change executes. The operator no longer needs a defensive check — if documents are invalid, the framework rejects the change at load time.
 
-### #3 - HIGH: `modifyCollection` has ZERO parameter validation
-**File:** `MongoOperationValidator.java:239-240`
-**Impact:** The `validateByType()` switch falls through to `default: return new ArrayList<>()` for `MODIFY_COLLECTION`, `DROP_COLLECTION`, `DROP_VIEW`, and `CREATE_COLLECTION`. While the last three genuinely need only a collection name, `modifyCollection` accepts `validator`, `validationLevel`, and `validationAction` parameters. None are validated. A user could pass `validationLevel: "banana"` and it would pass validation, only to fail at MongoDB runtime.
-**Risk:** Silent misconfiguration of collection-level validation rules in production.
-**Fix:** Add `case MODIFY_COLLECTION: return validateModifyCollection(op, entityId);` with checks for valid `validationLevel` values (`off`, `strict`, `moderate`) and valid `validationAction` values (`error`, `warn`).
+### #3 - ~~HIGH: `modifyCollection` has ZERO parameter validation~~ RESOLVED
+**Status:** Fixed by adding `ModifyCollectionParametersValidator`.
+**Original issue:** `modifyCollection` used `OperationValidator.NO_OP` in `MongoOperationType`, so none of its three parameters (`validator`, `validationLevel`, `validationAction`) were validated. A user could pass `validationLevel: "banana"` and it would pass validation, only to fail at MongoDB runtime.
+**Resolution:** `ModifyCollectionParametersValidator` now validates at load time: requires at least one recognized parameter, checks `validator` is a document (Map), checks `validationLevel` is one of `off`/`strict`/`moderate`, and checks `validationAction` is one of `error`/`warn`. Multiple errors accumulate. Wired into `MongoOperationType.MODIFY_COLLECTION` replacing the `NO_OP` validator.
 
 ### #4 - HIGH: Type-unsafe parameter extraction throughout MongoOperation
 **File:** `MongoOperation.java:46-115`
@@ -103,7 +102,7 @@ While the validator catches some of these cases, the validator runs only on the 
 | createIndex | `CREATE_INDEX` | `CreateIndexOperator` | **Yes (wrong)** | Full (keys) | `IndexOptionsMapper` | **Warns & ignores** | `CreateIndexOperatorTest` (1 test) | YAML `_0003`, `_0005` |
 | dropIndex | `DROP_INDEX` | `DropIndexOperator` | No | indexName or keys | None | **Ignores entirely** | `DropIndexOperatorTest` (1 test) | YAML `_0005` rollback |
 | renameCollection | `RENAME_COLLECTION` | `RenameCollectionOperator` | No | target required | `RenameCollectionOptionsMapper` | Ignores entirely | `RenameCollectionOperatorTest` (1 test) | None |
-| modifyCollection | `MODIFY_COLLECTION` | `ModifyCollectionOperator` | No | **None (bug)** | None | Ignores entirely | `ModifyCollectionOperatorTest` (1 test) | None |
+| modifyCollection | `MODIFY_COLLECTION` | `ModifyCollectionOperator` | No | Full (validator, validationLevel, validationAction) | None | Ignores entirely | `ModifyCollectionOperatorTest` (1 test) | None |
 | createView | `CREATE_VIEW` | `CreateViewOperator` | No | Full (viewOn, pipeline) | `CreateViewOptionsMapper` | Ignores entirely | `CreateViewOperatorTest` (1 test) | None |
 | dropView | `DROP_VIEW` | `DropViewOperator` | No | collection only | None | Ignores entirely | `DropViewOperatorTest` (1 test) | None |
 

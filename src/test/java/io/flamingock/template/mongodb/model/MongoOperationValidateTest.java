@@ -713,12 +713,173 @@ class MongoOperationValidateTest {
             assertTrue(errors.isEmpty());
         }
 
+    }
+
+    @Nested
+    @DisplayName("ModifyCollection Validation Tests")
+    class ModifyCollectionValidationTests {
+
         @Test
-        @DisplayName("WHEN modifyCollection is valid THEN validation passes")
-        void modifyCollectionValidTest() {
+        @DisplayName("WHEN modifyCollection has null parameters THEN validation fails")
+        void modifyCollectionNullParametersTest() {
             MongoOperation op = new MongoOperation();
             op.setType("modifyCollection");
             op.setCollection("test");
+            op.setParameters(null);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("at least one of"));
+        }
+
+        @Test
+        @DisplayName("WHEN modifyCollection has empty parameters THEN validation fails")
+        void modifyCollectionEmptyParametersTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("modifyCollection");
+            op.setCollection("test");
+            op.setParameters(new HashMap<>());
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("at least one of"));
+        }
+
+        @Test
+        @DisplayName("WHEN modifyCollection has invalid validationLevel THEN validation fails")
+        void modifyCollectionInvalidValidationLevelTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("modifyCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("validationLevel", "banana");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.validationLevel", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("'off', 'strict', 'moderate'"));
+        }
+
+        @Test
+        @DisplayName("WHEN modifyCollection has invalid validationAction THEN validation fails")
+        void modifyCollectionInvalidValidationActionTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("modifyCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("validationAction", "ignore");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.validationAction", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("'error', 'warn'"));
+        }
+
+        @Test
+        @DisplayName("WHEN modifyCollection has validator as wrong type THEN validation fails")
+        void modifyCollectionValidatorWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("modifyCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("validator", "not a map");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.validator", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a document"));
+        }
+
+        @Test
+        @DisplayName("WHEN modifyCollection has multiple invalid params THEN multiple errors reported")
+        void modifyCollectionMultipleInvalidParamsTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("modifyCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("validationLevel", "banana");
+            params.put("validationAction", "ignore");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(2, errors.size());
+        }
+
+        @Test
+        @DisplayName("WHEN modifyCollection has only valid validator THEN validation passes")
+        void modifyCollectionValidValidatorOnlyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("modifyCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            Map<String, Object> validator = new HashMap<>();
+            validator.put("$jsonSchema", new HashMap<>());
+            params.put("validator", validator);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertTrue(errors.isEmpty());
+        }
+
+        @Test
+        @DisplayName("WHEN modifyCollection has only valid validationLevel THEN validation passes")
+        void modifyCollectionValidValidationLevelOnlyTest() {
+            for (String level : Arrays.asList("off", "strict", "moderate")) {
+                MongoOperation op = new MongoOperation();
+                op.setType("modifyCollection");
+                op.setCollection("test");
+                Map<String, Object> params = new HashMap<>();
+                params.put("validationLevel", level);
+                op.setParameters(params);
+
+                List<TemplatePayloadValidationError> errors = op.validate();
+
+                assertTrue(errors.isEmpty(), "Expected no errors for validationLevel='" + level + "'");
+            }
+        }
+
+        @Test
+        @DisplayName("WHEN modifyCollection has only valid validationAction THEN validation passes")
+        void modifyCollectionValidValidationActionOnlyTest() {
+            for (String action : Arrays.asList("error", "warn")) {
+                MongoOperation op = new MongoOperation();
+                op.setType("modifyCollection");
+                op.setCollection("test");
+                Map<String, Object> params = new HashMap<>();
+                params.put("validationAction", action);
+                op.setParameters(params);
+
+                List<TemplatePayloadValidationError> errors = op.validate();
+
+                assertTrue(errors.isEmpty(), "Expected no errors for validationAction='" + action + "'");
+            }
+        }
+
+        @Test
+        @DisplayName("WHEN modifyCollection has all three valid params THEN validation passes")
+        void modifyCollectionAllValidParamsTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("modifyCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            Map<String, Object> validator = new HashMap<>();
+            validator.put("$jsonSchema", new HashMap<>());
+            params.put("validator", validator);
+            params.put("validationLevel", "strict");
+            params.put("validationAction", "error");
+            op.setParameters(params);
 
             List<TemplatePayloadValidationError> errors = op.validate();
 
