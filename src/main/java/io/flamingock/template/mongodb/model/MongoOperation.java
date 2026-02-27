@@ -28,7 +28,6 @@ import org.bson.Document;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @NonLockGuarded(NonLockGuardedType.NONE)
 public class MongoOperation implements TemplatePayload {
@@ -49,18 +48,9 @@ public class MongoOperation implements TemplatePayload {
     public void setParameters(Map<String, Object> parameters) { this.parameters = parameters; }
 
     @SuppressWarnings("unchecked")
-    public List<Document> getDocuments() {
-        return ((List<Map<String, Object>>) parameters.get("documents"))
-                .stream().map(Document::new)
-                .collect(Collectors.toList());
-    }
-
-    @SuppressWarnings("unchecked")
     public Document getKeys() {
         return new Document((Map<String, Object>) parameters.get("keys"));
     }
-
-
 
     @SuppressWarnings("unchecked")
     public Document getOptions() {
@@ -72,46 +62,6 @@ public class MongoOperation implements TemplatePayload {
     @SuppressWarnings("unchecked")
     public Document getFilter() {
         return new Document((Map<String, Object>) parameters.get("filter"));
-    }
-
-    public String getIndexName() {
-        Object value = parameters.get("indexName");
-        return value != null ? (String) value : null;
-    }
-
-    public String getTarget() {
-        return (String) parameters.get("target");
-    }
-
-    @SuppressWarnings("unchecked")
-    public Document getValidator() {
-        Object value = parameters.get("validator");
-        return value != null ? new Document((Map<String, Object>) value) : null;
-    }
-
-    public String getValidationLevel() {
-        return (String) parameters.get("validationLevel");
-    }
-
-    public String getValidationAction() {
-        return (String) parameters.get("validationAction");
-    }
-
-    public String getViewOn() {
-        return (String) parameters.get("viewOn");
-    }
-
-    @SuppressWarnings("unchecked")
-    public List<Document> getPipeline() {
-        List<Map<String, Object>> rawPipeline = (List<Map<String, Object>>) parameters.get("pipeline");
-        return rawPipeline != null
-                ? rawPipeline.stream().map(Document::new).collect(Collectors.toList())
-                : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    public Document getUpdate() {
-        return new Document((Map<String, Object>) parameters.get("update"));
     }
 
     public boolean isMulti() {

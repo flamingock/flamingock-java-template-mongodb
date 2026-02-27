@@ -30,8 +30,12 @@ public class RenameCollectionOperator extends MongoOperator {
 
     @Override
     protected void applyInternal(ClientSession clientSession) {
-        MongoNamespace target = new MongoNamespace(mongoDatabase.getName(), op.getTarget());
+        MongoNamespace target = new MongoNamespace(mongoDatabase.getName(), getTarget());
         RenameCollectionOptions options = RenameCollectionOptionsMapper.map(op.getOptions());
         mongoDatabase.getCollection(op.getCollection()).renameCollection(target, options);
+    }
+
+    private String getTarget() {
+        return (String) op.getParameters().get("target");
     }
 }

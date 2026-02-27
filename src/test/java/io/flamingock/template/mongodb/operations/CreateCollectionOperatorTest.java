@@ -15,21 +15,11 @@
  */
 package io.flamingock.template.mongodb.operations;
 
-import com.mongodb.ConnectionString;
-import com.mongodb.MongoClientSettings;
-import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoClients;
-import com.mongodb.client.MongoDatabase;
 import io.flamingock.template.mongodb.model.MongoOperation;
 import io.flamingock.template.mongodb.model.operator.CreateCollectionOperator;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.MongoDBContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -37,26 +27,9 @@ import java.util.HashMap;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Testcontainers
-class CreateCollectionOperatorTest {
+class CreateCollectionOperatorTest extends AbstractMongoOperatorTest {
 
-    private static final String DB_NAME = "test";
     private static final String COLLECTION_NAME = "newTestCollection";
-
-    private static MongoClient mongoClient;
-    private static MongoDatabase mongoDatabase;
-
-    @Container
-    public static final MongoDBContainer mongoDBContainer = new MongoDBContainer(DockerImageName.parse("mongo:6"));
-
-    @BeforeAll
-    static void beforeAll() {
-        mongoClient = MongoClients.create(MongoClientSettings
-                .builder()
-                .applyConnectionString(new ConnectionString(mongoDBContainer.getConnectionString()))
-                .build());
-        mongoDatabase = mongoClient.getDatabase(DB_NAME);
-    }
 
     @BeforeEach
     void setupEach() {

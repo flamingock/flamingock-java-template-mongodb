@@ -20,12 +20,8 @@ import com.mongodb.client.model.CollationAlternate;
 import com.mongodb.client.model.CollationCaseFirst;
 import com.mongodb.client.model.CollationMaxVariable;
 import com.mongodb.client.model.CollationStrength;
-import org.bson.BsonArray;
-import org.bson.BsonDocument;
-import org.bson.BsonValue;
 import org.bson.conversions.Bson;
 
-import java.util.List;
 import java.util.Map;
 
 public final class MapperUtil {
@@ -82,7 +78,7 @@ public final class MapperUtil {
         if (value instanceof Bson) {
             return (Bson) value;
         } else if (value instanceof Map) {
-            return toBsonDocument((Map<String, Object>) value);
+            return BsonConverter.toBsonDocument((Map<String, Object>) value);
         } else {
             throw new IllegalArgumentException(String.format("field[%s] should be Bson", key));
         }
@@ -135,42 +131,4 @@ public final class MapperUtil {
         return builder.build();
     }
 
-    // Recursively converts a Map<String, Object> to BsonDocument
-    public static BsonDocument toBsonDocument(Map<String, Object> map) {
-        BsonDocument document = new BsonDocument();
-        map.forEach((key, value) -> document.append(key, toBsonValue(value)));
-        return document;
-    }
-
-    // Converts Java types into BSON types
-    @SuppressWarnings("unchecked")
-    public static BsonValue toBsonValue(Object value) {
-        if (value == null) {
-            return org.bson.BsonNull.VALUE;
-        } else if (value instanceof String) {
-            return new org.bson.BsonString((String) value);
-        } else if (value instanceof Integer) {
-            return new org.bson.BsonInt32((Integer) value);
-        } else if (value instanceof Long) {
-            return new org.bson.BsonInt64((Long) value);
-        } else if (value instanceof Double) {
-            return new org.bson.BsonDouble((Double) value);
-        } else if (value instanceof Boolean) {
-            return new org.bson.BsonBoolean((Boolean) value);
-        } else if (value instanceof List) {
-            return toBsonArray((List<?>) value);
-        } else if (value instanceof Map) {
-            return toBsonDocument((Map<String, Object>) value);
-        }
-        throw new IllegalArgumentException("Unsupported BSON type: " + value.getClass().getSimpleName());
-    }
-
-    // Converts a List to BsonArray
-    public static BsonArray toBsonArray(List<?> list) {
-        BsonArray array = new BsonArray();
-        for (Object item : list) {
-            array.add(toBsonValue(item));
-        }
-        return array;
-    }
 }

@@ -24,8 +24,11 @@ import io.flamingock.template.mongodb.mapper.InsertOptionsMapper;
 import io.flamingock.template.mongodb.model.MongoOperation;
 import org.bson.Document;
 
-public class InsertOperator extends MongoOperator {
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
+public class InsertOperator extends MongoOperator {
 
     public InsertOperator(MongoDatabase mongoDatabase, MongoOperation operation) {
         super(mongoDatabase, operation, true);
@@ -34,14 +37,14 @@ public class InsertOperator extends MongoOperator {
     /**
      * Executes the insert operation against MongoDB.
      * <p>
-     * Precondition: {@code op.getDocuments()} is guaranteed non-null and non-empty
+     * Precondition: documents are guaranteed non-null and non-empty
      * by {@code InsertParametersValidator} at load time, so no defensive check is needed here.
      */
     @Override
     protected void applyInternal(ClientSession clientSession) {
         MongoCollection<Document> collection = mongoDatabase.getCollection(op.getCollection());
 
-        if(op.getDocuments().size() == 1) {
+        if (getDocuments().size() == 1) {
             insertOne(clientSession, collection);
         } else {
             insertMany(clientSession, collection);
@@ -49,41 +52,41 @@ public class InsertOperator extends MongoOperator {
     }
 
     private void insertMany(ClientSession clientSession, MongoCollection<Document> collection) {
-        if(clientSession != null) {
-            if(!op.getOptions().isEmpty()) {
-                InsertManyOptions insertManyOptions = InsertOptionsMapper.mapToInsertManyOptions(op.getOptions());
-                collection.insertMany(clientSession, op.getDocuments(), insertManyOptions);
-            } else {
-                collection.insertMany(clientSession, op.getDocuments());
-            }
+        List<Document> docs = getDocuments();
+        InsertManyOptions options = op.getOptions().isEmpty()
+                ? null : InsertOptionsMapper.mapToInsertManyOptions(op.getOptions());
 
+        if (clientSession != null && options != null) {
+            collection.insertMany(clientSession, docs, options);
+        } else if (clientSession != null) {
+            collection.insertMany(clientSession, docs);
+        } else if (options != null) {
+            collection.insertMany(docs, options);
         } else {
-            if(!op.getOptions().isEmpty()) {
-                InsertManyOptions insertManyOptions = InsertOptionsMapper.mapToInsertManyOptions(op.getOptions());
-                collection.insertMany(op.getDocuments(), insertManyOptions);
-            } else {
-                collection.insertMany(op.getDocuments());
-            }
+            collection.insertMany(docs);
         }
     }
 
     private void insertOne(ClientSession clientSession, MongoCollection<Document> collection) {
+        Document doc = getDocuments().get(0);
+        InsertOneOptions options = op.getOptions().isEmpty()
+                ? null : InsertOptionsMapper.mapToInsertOneOptions(op.getOptions());
 
-        if(clientSession != null) {
-            if(!op.getOptions().isEmpty()) {
-                InsertOneOptions insertOneOptions = InsertOptionsMapper.mapToInsertOneOptions(op.getOptions());
-                collection.insertOne(clientSession, op.getDocuments().get(0), insertOneOptions);
-            } else {
-                collection.insertOne(clientSession, op.getDocuments().get(0));
-            }
-
+        if (clientSession != null && options != null) {
+            collection.insertOne(clientSession, doc, options);
+        } else if (clientSession != null) {
+            collection.insertOne(clientSession, doc);
+        } else if (options != null) {
+            collection.insertOne(doc, options);
         } else {
-            if(!op.getOptions().isEmpty()) {
-                InsertOneOptions insertOneOptions = InsertOptionsMapper.mapToInsertOneOptions(op.getOptions());
-                collection.insertOne(op.getDocuments().get(0), insertOneOptions);
-            } else {
-                collection.insertOne(op.getDocuments().get(0));
-            }
+            collection.insertOne(doc);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Document> getDocuments() {
+        return ((List<Map<String, Object>>) op.getParameters().get("documents"))
+                .stream().map(Document::new)
+                .collect(Collectors.toList());
     }
 }
