@@ -16,6 +16,10 @@
 package io.flamingock.template.mongodb.mapper;
 
 import com.mongodb.client.model.Collation;
+import com.mongodb.client.model.CollationAlternate;
+import com.mongodb.client.model.CollationCaseFirst;
+import com.mongodb.client.model.CollationMaxVariable;
+import com.mongodb.client.model.CollationStrength;
 import org.bson.BsonArray;
 import org.bson.BsonDocument;
 import org.bson.BsonValue;
@@ -88,9 +92,47 @@ public final class MapperUtil {
         Object value = options.get(key);
         if (value instanceof Collation) {
             return (Collation) value;
+        } else if (value instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = (Map<String, Object>) value;
+            return buildCollationFromMap(map);
         } else {
-            throw new IllegalArgumentException(String.format("field[%s] should be Collation", key));
+            throw new IllegalArgumentException(String.format("field[%s] should be Collation or Map", key));
         }
+    }
+
+    private static Collation buildCollationFromMap(Map<String, Object> map) {
+        Object locale = map.get("locale");
+        if (!(locale instanceof String)) {
+            throw new IllegalArgumentException("Collation requires 'locale' as a String");
+        }
+        Collation.Builder builder = Collation.builder().locale((String) locale);
+
+        if (map.containsKey("caseLevel")) {
+            builder.caseLevel((Boolean) map.get("caseLevel"));
+        }
+        if (map.containsKey("caseFirst")) {
+            builder.collationCaseFirst(CollationCaseFirst.fromString((String) map.get("caseFirst")));
+        }
+        if (map.containsKey("strength")) {
+            builder.collationStrength(CollationStrength.fromInt(((Number) map.get("strength")).intValue()));
+        }
+        if (map.containsKey("numericOrdering")) {
+            builder.numericOrdering((Boolean) map.get("numericOrdering"));
+        }
+        if (map.containsKey("alternate")) {
+            builder.collationAlternate(CollationAlternate.fromString((String) map.get("alternate")));
+        }
+        if (map.containsKey("maxVariable")) {
+            builder.collationMaxVariable(CollationMaxVariable.fromString((String) map.get("maxVariable")));
+        }
+        if (map.containsKey("normalization")) {
+            builder.normalization((Boolean) map.get("normalization"));
+        }
+        if (map.containsKey("backwards")) {
+            builder.backwards((Boolean) map.get("backwards"));
+        }
+        return builder.build();
     }
 
     // Recursively converts a Map<String, Object> to BsonDocument

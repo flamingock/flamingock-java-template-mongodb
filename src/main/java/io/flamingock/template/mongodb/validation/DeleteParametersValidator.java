@@ -19,10 +19,15 @@ import io.flamingock.api.template.TemplatePayloadValidationError;
 import io.flamingock.template.mongodb.model.MongoOperation;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class DeleteParametersValidator implements OperationValidator {
+
+    private static final Set<String> RECOGNIZED_KEYS = new HashSet<>(Arrays.asList("filter", "multi"));
 
     @Override
     public List<TemplatePayloadValidationError> validate(MongoOperation operation) {
@@ -36,6 +41,16 @@ public class DeleteParametersValidator implements OperationValidator {
         } else if (!(filter instanceof Map)) {
             errors.add(new TemplatePayloadValidationError("parameters.filter",
                     "'filter' must be a document"));
+        }
+
+        if (params != null) {
+            Object multi = params.get("multi");
+            if (multi != null && !(multi instanceof Boolean)) {
+                errors.add(new TemplatePayloadValidationError("parameters.multi",
+                        "'multi' must be a boolean"));
+            }
+
+            errors.addAll(OperationValidator.checkUnrecognizedKeys(params, RECOGNIZED_KEYS, "Delete"));
         }
 
         return errors;

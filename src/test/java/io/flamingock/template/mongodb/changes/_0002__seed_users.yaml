@@ -20,3 +20,4 @@ steps:
       collection: users
       parameters:
         filter: {}
+        multi: true

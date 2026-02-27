@@ -30,9 +30,6 @@ public class CreateIndexOperator extends MongoOperator {
 
     @Override
     protected void applyInternal(ClientSession clientSession) {
-        if (clientSession != null) {
-            logger.warn("MongoDB does not support transactions for createIndex operation. Ignoring transactional flag.");
-        }
         IndexOptions indexOptions = IndexOptionsMapper.mapToIndexOptions(op.getOptions());
         mongoDatabase.getCollection(op.getCollection())
                 .createIndex(op.getKeys(), indexOptions);

@@ -74,8 +74,38 @@ class DeleteOperatorTest {
     }
 
     @Test
-    @DisplayName("WHEN delete operator is applied with specific filter THEN matching documents are deleted")
-    void deleteWithFilterTest() {
+    @DisplayName("WHEN delete operator is applied with multi=true THEN all matching documents are deleted")
+    void deleteWithFilterMultiTrueTest() {
+        assertEquals(4, getDocumentCount(), "Collection should have 4 documents before delete");
+
+        MongoOperation operation = new MongoOperation();
+        operation.setType("delete");
+        operation.setCollection(COLLECTION_NAME);
+
+        Map<String, Object> params = new HashMap<>();
+        Map<String, Object> filter = new HashMap<>();
+        filter.put("role", "user");
+        params.put("filter", filter);
+        params.put("multi", true);
+        operation.setParameters(params);
+
+        DeleteOperator operator = new DeleteOperator(mongoDatabase, operation);
+        operator.apply(null);
+
+        assertEquals(2, getDocumentCount(), "Collection should have 2 documents after deleteMany");
+
+        List<Document> remainingDocs = mongoDatabase.getCollection(COLLECTION_NAME)
+                .find()
+                .into(new ArrayList<>());
+
+        for (Document doc : remainingDocs) {
+            assertEquals("admin", doc.getString("role"), "Only admin documents should remain");
+        }
+    }
+
+    @Test
+    @DisplayName("WHEN delete operator is applied without multi (default) THEN only one matching document is deleted")
+    void deleteWithFilterDefaultSingleTest() {
         assertEquals(4, getDocumentCount(), "Collection should have 4 documents before delete");
 
         MongoOperation operation = new MongoOperation();
@@ -91,19 +121,11 @@ class DeleteOperatorTest {
         DeleteOperator operator = new DeleteOperator(mongoDatabase, operation);
         operator.apply(null);
 
-        assertEquals(2, getDocumentCount(), "Collection should have 2 documents after delete");
-
-        List<Document> remainingDocs = mongoDatabase.getCollection(COLLECTION_NAME)
-                .find()
-                .into(new ArrayList<>());
-
-        for (Document doc : remainingDocs) {
-            assertEquals("admin", doc.getString("role"), "Only admin documents should remain");
-        }
+        assertEquals(3, getDocumentCount(), "Collection should have 3 documents after deleteOne");
     }
 
     @Test
-    @DisplayName("WHEN delete operator is applied with empty filter THEN all documents are deleted")
+    @DisplayName("WHEN delete operator is applied with empty filter and multi=true THEN all documents are deleted")
     void deleteAllWithEmptyFilterTest() {
         assertEquals(4, getDocumentCount(), "Collection should have 4 documents before delete");
 
@@ -113,12 +135,13 @@ class DeleteOperatorTest {
 
         Map<String, Object> params = new HashMap<>();
         params.put("filter", new HashMap<>());
+        params.put("multi", true);
         operation.setParameters(params);
 
         DeleteOperator operator = new DeleteOperator(mongoDatabase, operation);
         operator.apply(null);
 
-        assertEquals(0, getDocumentCount(), "Collection should be empty after delete with empty filter");
+        assertEquals(0, getDocumentCount(), "Collection should be empty after deleteMany with empty filter");
     }
 
     @Test

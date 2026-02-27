@@ -19,10 +19,15 @@ import io.flamingock.api.template.TemplatePayloadValidationError;
 import io.flamingock.template.mongodb.model.MongoOperation;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class DropIndexParametersValidator implements OperationValidator {
+
+    private static final Set<String> RECOGNIZED_KEYS = new HashSet<>(Arrays.asList("indexName", "keys"));
 
     @Override
     public List<TemplatePayloadValidationError> validate(MongoOperation operation) {
@@ -52,6 +57,8 @@ public class DropIndexParametersValidator implements OperationValidator {
             errors.add(new TemplatePayloadValidationError("parameters.keys",
                     "'keys' must be a map"));
         }
+
+        errors.addAll(OperationValidator.checkUnrecognizedKeys(params, RECOGNIZED_KEYS, "DropIndex"));
 
         return errors;
     }

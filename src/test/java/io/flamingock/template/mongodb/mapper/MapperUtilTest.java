@@ -16,6 +16,9 @@
 package io.flamingock.template.mongodb.mapper;
 
 import com.mongodb.client.model.Collation;
+import com.mongodb.client.model.CollationAlternate;
+import com.mongodb.client.model.CollationCaseFirst;
+import com.mongodb.client.model.CollationMaxVariable;
 import com.mongodb.client.model.CollationStrength;
 import org.bson.BsonArray;
 import org.bson.BsonBoolean;
@@ -250,13 +253,60 @@ class MapperUtilTest {
         }
 
         @Test
-        @DisplayName("WHEN value is not Collation THEN throws IllegalArgumentException")
+        @DisplayName("WHEN value is Map with locale only THEN returns Collation")
+        void getCollationFromMapLocaleOnlyTest() {
+            Map<String, Object> collationMap = new HashMap<>();
+            collationMap.put("locale", "en");
+
+            Map<String, Object> options = new HashMap<>();
+            options.put("collation", collationMap);
+
+            Collation result = MapperUtil.getCollation(options, "collation");
+
+            assertNotNull(result);
+            assertEquals("en", result.getLocale());
+        }
+
+        @Test
+        @DisplayName("WHEN value is Map with all fields THEN returns fully configured Collation")
+        void getCollationFromMapAllFieldsTest() {
+            Map<String, Object> collationMap = new HashMap<>();
+            collationMap.put("locale", "en");
+            collationMap.put("caseLevel", true);
+            collationMap.put("caseFirst", "upper");
+            collationMap.put("strength", 2);
+            collationMap.put("numericOrdering", true);
+            collationMap.put("alternate", "shifted");
+            collationMap.put("maxVariable", "space");
+            collationMap.put("normalization", true);
+            collationMap.put("backwards", true);
+
+            Map<String, Object> options = new HashMap<>();
+            options.put("collation", collationMap);
+
+            Collation result = MapperUtil.getCollation(options, "collation");
+
+            assertNotNull(result);
+            assertEquals("en", result.getLocale());
+            assertTrue(result.getCaseLevel());
+            assertEquals(CollationCaseFirst.UPPER, result.getCaseFirst());
+            assertEquals(CollationStrength.SECONDARY, result.getStrength());
+            assertTrue(result.getNumericOrdering());
+            assertEquals(CollationAlternate.SHIFTED, result.getAlternate());
+            assertEquals(CollationMaxVariable.SPACE, result.getMaxVariable());
+            assertTrue(result.getNormalization());
+            assertTrue(result.getBackwards());
+        }
+
+        @Test
+        @DisplayName("WHEN value is not Collation or Map THEN throws IllegalArgumentException")
         void getCollationInvalidTest() {
             Map<String, Object> options = new HashMap<>();
             options.put("collation", "not a collation");
 
-            assertThrows(IllegalArgumentException.class, () ->
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
                     MapperUtil.getCollation(options, "collation"));
+            assertTrue(ex.getMessage().contains("Collation or Map"));
         }
     }
 

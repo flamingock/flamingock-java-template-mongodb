@@ -51,34 +51,32 @@ YAML -> MongoOperation (deserialized) -> MongoOperationValidator -> MongoOperati
 ### #5 - ~~HIGH: CreateIndexOperator claims `transactional=true` but ignores the session~~ RESOLVED
 **Status:** Fixed by correcting the transactional flag and warning message.
 **Original issue:** Constructor passed `super(mongoDatabase, operation, true)`, declaring itself transactional. But `applyInternal()` warned about "createCollection operation" (copy-paste error — should say "createIndex") and then ignored the `clientSession` entirely. MongoDB index operations are DDL and do not participate in transactions, so the flag was incorrect.
-**Resolution:** Changed constructor to `super(mongoDatabase, operation, false)` to match all other DDL operators. Fixed the warning message from "createCollection operation" to "createIndex operation".
+**Resolution:** Changed constructor to `super(mongoDatabase, operation, false)` to match all other DDL operators. Fixed the warning message from "createCollection operation" to "createIndex operation". The per-operator warning blocks were later removed entirely (see issue #6) since the base class `MongoOperator.logOperation()` already handles session mismatch logging uniformly.
 
-### #6 - MEDIUM: DropIndexOperator completely ignores ClientSession
-**File:** `DropIndexOperator.java:29-35`
-**Impact:** Unlike other operators that check `if (clientSession != null)` and use it, `DropIndexOperator` never references `clientSession` at all (it receives it as a parameter but discards it). It's marked `transactional=false` in the constructor (line 25), which is correct, but the logging from `MongoOperator.logOperation()` will still produce a confusing info message if a session is present: `"DropIndexOperator is not transactional, but Change has been marked as transactional. Transaction ignored."` This is acceptable behavior but worth documenting.
-**Fix:** Minor - add a comment explaining this is intentional. The behavior is correct.
+### #6 - ~~MEDIUM: DDL operators have inconsistent session handling~~ RESOLVED
+**Status:** Fixed by removing redundant session warning blocks.
+**Original issue:** `CreateCollectionOperator` and `CreateIndexOperator` had redundant `if (clientSession != null) { logger.warn(...) }` blocks, while the other 6 DDL operators silently ignored the session. The base class `MongoOperator.logOperation()` already handles this case with an INFO log.
+**Resolution:** Removed the redundant warning blocks from `CreateCollectionOperator` and `CreateIndexOperator`. All 8 DDL operators now consistently trust the base class logging. Also removed the duplicate logger declaration from `CreateCollectionOperator` (see issue #10).
 
-### #7 - MEDIUM: `getCollation()` in MapperUtil will always fail for YAML-sourced input
-**File:** `MapperUtil.java:87-94`
-**Impact:** The method checks `if (value instanceof Collation)` and otherwise throws `IllegalArgumentException`. When YAML is parsed, collation will be deserialized as a `Map<String, Object>`, never as a `Collation` object. This means the `collation` option in `IndexOptionsMapper` (line 92), `UpdateOptionsMapper` (line 41), and `CreateViewOptionsMapper` (line 31) can never work from YAML input. It will always throw `"field[collation] should be Collation"`.
-**Risk:** Documented options that are impossible to use. Users who try `collation` in YAML will get a confusing error.
-**Fix:** Implement Map-to-Collation conversion similar to how `getBson()` handles `Map` -> `BsonDocument` conversion. The Collation builder needs to be populated from the map keys (`locale`, `strength`, `caseLevel`, etc.).
+### #7 - ~~MEDIUM: `getCollation()` in MapperUtil will always fail for YAML-sourced input~~ RESOLVED
+**Status:** Fixed by adding Map-to-Collation conversion.
+**Original issue:** `getCollation()` only accepted `Collation` instances but YAML always deserializes to `Map<String, Object>`, making the `collation` option in `IndexOptionsMapper`, `UpdateOptionsMapper`, and `CreateViewOptionsMapper` impossible to use from YAML.
+**Resolution:** Added `else if (value instanceof Map)` branch to `getCollation()` with a `buildCollationFromMap()` private method that handles all 9 Collation builder fields (`locale`, `caseLevel`, `caseFirst`, `strength`, `numericOrdering`, `alternate`, `maxVariable`, `normalization`, `backwards`). Tests added for Map with locale only, Map with all fields, and invalid type.
 
-### #8 - MEDIUM: DeleteOperator always uses `deleteMany`, no `deleteOne` support
-**File:** `DeleteOperator.java:36-38`
-**Impact:** Unlike `UpdateOperator` which supports `multi: true/false` to switch between `updateOne`/`updateMany`, `DeleteOperator` always calls `collection.deleteMany()`. There is no `multi` parameter or any way to delete a single document. The `delete` operation documentation in `MongoOperationValidator.java:80-88` shows `filter` is the only parameter, confirming `deleteOne` is not supported.
-**Risk:** Users cannot safely delete a single document matching a filter when multiple documents could match. All matching documents are always deleted.
-**Fix:** Add `multi` parameter support (defaulting to `true` for backwards compatibility, or `false` to match MongoDB's default `deleteOne`). Consider the migration safety implications of the default.
+### #8 - ~~MEDIUM: DeleteOperator always uses `deleteMany`, no `deleteOne` support~~ RESOLVED
+**Status:** Fixed by adding `multi` parameter support.
+**Original issue:** `DeleteOperator` always called `deleteMany()` with no way to delete a single document.
+**Resolution:** Added `multi` parameter support to `DeleteOperator`, following the same pattern as `UpdateOperator`. Default is `false` (`deleteOne`), matching MongoDB's native default. Users must explicitly set `multi: true` for `deleteMany`. `DeleteParametersValidator` validates that `multi` is a boolean when present. Existing YAML test files updated to set `multi: true` where `deleteMany` behavior is intended.
 
-### #9 - MEDIUM: Unknown YAML fields are silently accepted
-**Impact:** The YAML deserialization into `MongoOperation` only maps `type`, `collection`, and `parameters`. Any extra top-level field (e.g., a typo like `colection` or `paramters`) is silently ignored. Within `parameters`, the validator checks for specific required keys but never rejects unknown keys. A user could write `parameters: { documets: [...] }` (typo) for an insert, and the validator would correctly fail with "requires 'documents' parameter", but a field like `parameters: { documents: [...], unknown_field: true }` passes silently.
-**Risk:** Typos in parameter names that don't affect required-field validation go undetected.
-**Fix:** Add strict mode option that warns or rejects unknown parameter keys per operation type.
+### #9 - ~~MEDIUM: Unknown YAML fields are silently accepted~~ RESOLVED
+**Status:** Fixed by adding unrecognized parameter key rejection.
+**Original issue:** Unknown parameter keys (typos like `documets` instead of `documents`) were silently accepted within `parameters`.
+**Resolution:** Added a static `checkUnrecognizedKeys()` utility method to `OperationValidator` interface. Each of the 7 non-NO_OP validators now declares a `RECOGNIZED_KEYS` set and calls this utility at the end of validation. Unrecognized keys produce a validation error like `"Insert operation does not recognize parameter 'unknownKey'"`. Top-level keys only — nested fields inside `options`, `filter`, `documents`, etc. are not validated (they're opaque MongoDB driver domain). NO_OP validators (createCollection, dropCollection, dropView) are left as-is since those operations don't expect parameters. Tests added for all 8 operation types with validators.
 
-### #10 - LOW: Duplicate logger field in CreateCollectionOperator
-**File:** `CreateCollectionOperator.java:25`
-**Impact:** `CreateCollectionOperator` declares `protected static final Logger logger = FlamingockLoggerFactory.getLogger("CreateCollection")` which shadows the parent's `MongoOperator.logger` field (also `protected static final Logger logger` at line 25). Both are static, so the parent's `logOperation()` method uses `MongoOperator.logger` ("MongoTemplate") while `CreateCollectionOperator.applyInternal()` uses its own `logger` ("CreateCollection"). This inconsistency means log messages from the same operation go to different logger names.
-**Fix:** Remove the duplicate logger declaration from `CreateCollectionOperator`. Let it inherit the parent's.
+### #10 - ~~LOW: Duplicate logger field in CreateCollectionOperator~~ RESOLVED
+**Status:** Fixed by removing duplicate logger.
+**Original issue:** `CreateCollectionOperator` declared its own `logger` which shadowed the parent's `MongoOperator.logger`, causing inconsistent logger names for the same operation.
+**Resolution:** Removed the duplicate logger declaration and unused imports from `CreateCollectionOperator`. It now inherits the parent's logger.
 
 ---
 
@@ -86,12 +84,12 @@ YAML -> MongoOperation (deserialized) -> MongoOperationValidator -> MongoOperati
 
 | Operation | Enum Value | Operator Class | Transactional | Validation | Options Mapper | Session Handling | Unit Test | Integration Test |
 |-----------|-----------|---------------|:---:|:---:|:---:|:---:|:---:|:---:|
-| createCollection | `CREATE_COLLECTION` | `CreateCollectionOperator` | No | collection only | None | Warns & ignores | `CreateCollectionOperatorTest` (1 test) | YAML `_0001` |
+| createCollection | `CREATE_COLLECTION` | `CreateCollectionOperator` | No | collection only | None | Ignores (base class logs) | `CreateCollectionOperatorTest` (1 test) | YAML `_0001` |
 | dropCollection | `DROP_COLLECTION` | `DropCollectionOperator` | No | collection only | None | Ignores entirely | `DropCollectionOperatorTest` (1 test) | YAML `_0004` rollback |
 | insert | `INSERT` | `InsertOperator` | Yes | Full (documents) | `InsertOptionsMapper` | Full | `InsertOperatorTest` (3 tests) | YAML `_0002`, `_0003`, `_0005` |
 | update | `UPDATE` | `UpdateOperator` | Yes | Full (filter, update) | `UpdateOptionsMapper` | Full | `UpdateOperatorTest` (1 test) | None |
-| delete | `DELETE` | `DeleteOperator` | Yes | filter required | None | Full | `DeleteOperatorTest` (1 test) | YAML `_0002` rollback |
-| createIndex | `CREATE_INDEX` | `CreateIndexOperator` | No | Full (keys) | `IndexOptionsMapper` | Warns & ignores | `CreateIndexOperatorTest` (1 test) | YAML `_0003`, `_0005` |
+| delete | `DELETE` | `DeleteOperator` | Yes | filter required, multi (opt) | None | Full | `DeleteOperatorTest` (5 tests) | YAML `_0002` rollback |
+| createIndex | `CREATE_INDEX` | `CreateIndexOperator` | No | Full (keys) | `IndexOptionsMapper` | Ignores (base class logs) | `CreateIndexOperatorTest` (1 test) | YAML `_0003`, `_0005` |
 | dropIndex | `DROP_INDEX` | `DropIndexOperator` | No | indexName or keys | None | **Ignores entirely** | `DropIndexOperatorTest` (1 test) | YAML `_0005` rollback |
 | renameCollection | `RENAME_COLLECTION` | `RenameCollectionOperator` | No | target required | `RenameCollectionOptionsMapper` | Ignores entirely | `RenameCollectionOperatorTest` (1 test) | None |
 | modifyCollection | `MODIFY_COLLECTION` | `ModifyCollectionOperator` | No | Full (validator, validationLevel, validationAction) | None | Ignores entirely | `ModifyCollectionOperatorTest` (1 test) | None |

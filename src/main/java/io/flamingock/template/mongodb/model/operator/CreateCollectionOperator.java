@@ -18,12 +18,8 @@ package io.flamingock.template.mongodb.model.operator;
 import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoDatabase;
 import io.flamingock.template.mongodb.model.MongoOperation;
-import io.flamingock.internal.util.log.FlamingockLoggerFactory;
-import org.slf4j.Logger;
 
 public class CreateCollectionOperator extends MongoOperator {
-    protected static final Logger logger = FlamingockLoggerFactory.getLogger("CreateCollection");
-
 
     public CreateCollectionOperator(MongoDatabase mongoDatabase, MongoOperation operation) {
         super(mongoDatabase, operation, false);
@@ -31,9 +27,6 @@ public class CreateCollectionOperator extends MongoOperator {
 
     @Override
     public void applyInternal(ClientSession clientSession) {
-        if (clientSession != null) {
-            logger.warn("MongoDB does not support transactions for createCollection operation. Ignoring transactional flag.");
-        }
         mongoDatabase.createCollection(op.getCollection());
     }
 

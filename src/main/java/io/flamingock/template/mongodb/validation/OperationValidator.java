@@ -18,8 +18,11 @@ package io.flamingock.template.mongodb.validation;
 import io.flamingock.api.template.TemplatePayloadValidationError;
 import io.flamingock.template.mongodb.model.MongoOperation;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @FunctionalInterface
 public interface OperationValidator {
@@ -27,4 +30,19 @@ public interface OperationValidator {
     OperationValidator NO_OP = operation -> Collections.emptyList();
 
     List<TemplatePayloadValidationError> validate(MongoOperation operation);
+
+    static List<TemplatePayloadValidationError> checkUnrecognizedKeys(
+            Map<String, Object> params, Set<String> recognizedKeys, String operationName) {
+        List<TemplatePayloadValidationError> errors = new ArrayList<>();
+        if (params == null) {
+            return errors;
+        }
+        for (String key : params.keySet()) {
+            if (!recognizedKeys.contains(key)) {
+                errors.add(new TemplatePayloadValidationError("parameters." + key,
+                        operationName + " operation does not recognize parameter '" + key + "'"));
+            }
+        }
+        return errors;
+    }
 }

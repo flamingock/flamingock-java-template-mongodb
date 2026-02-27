@@ -31,6 +31,7 @@ steps:
       collection: products
       parameters:
         filter: {}
+        multi: true
 
   - apply:
       type: createIndex
