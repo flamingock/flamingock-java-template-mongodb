@@ -31,12 +31,15 @@ public class InsertOperator extends MongoOperator {
         super(mongoDatabase, operation, true);
     }
 
+    /**
+     * Executes the insert operation against MongoDB.
+     * <p>
+     * Precondition: {@code op.getDocuments()} is guaranteed non-null and non-empty
+     * by {@code InsertParametersValidator} at load time, so no defensive check is needed here.
+     */
     @Override
     protected void applyInternal(ClientSession clientSession) {
         MongoCollection<Document> collection = mongoDatabase.getCollection(op.getCollection());
-        if(op.getDocuments() == null || op.getDocuments().isEmpty()) {
-            return;
-        }
 
         if(op.getDocuments().size() == 1) {
             insertOne(clientSession, collection);
