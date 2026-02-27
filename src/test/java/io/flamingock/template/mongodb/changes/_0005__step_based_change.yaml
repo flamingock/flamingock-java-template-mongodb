@@ -1,6 +1,6 @@
 id: step-based-change
 transactional: false
-template: MongoChangeTemplate
+template: mongodb-sync-template
 targetSystem:
   id: "mongodb"
 

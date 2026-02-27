@@ -23,13 +23,8 @@ import io.flamingock.api.annotations.Nullable;
 import io.flamingock.api.annotations.Rollback;
 import io.flamingock.api.template.AbstractChangeTemplate;
 import io.flamingock.template.mongodb.model.MongoOperation;
-import io.flamingock.template.mongodb.validation.MongoOperationValidator;
-import io.flamingock.template.mongodb.validation.MongoTemplateValidationException;
-import io.flamingock.template.mongodb.validation.ValidationError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.List;
 
 /**
  * MongoDB Change Template for executing declarative MongoDB operations defined in YAML.
@@ -45,7 +40,7 @@ import java.util.List;
  * <pre>{@code
  * id: create-orders-collection
  * transactional: false
- * template: MongoChangeTemplate
+ * template: mongodb-sync-template
  * targetSystem:
  *   id: "mongodb"
  * steps:
@@ -89,12 +84,6 @@ public class MongoChangeTemplate extends AbstractChangeTemplate<Void, MongoOpera
     @Apply
     public void apply(MongoDatabase db, @Nullable ClientSession clientSession) {
         validateSession(clientSession);
-
-        List<ValidationError> errors = MongoOperationValidator.validate(applyPayload, changeId);
-        if (!errors.isEmpty()) {
-            throw new MongoTemplateValidationException(errors);
-        }
-
         applyPayload.getOperator(db).apply(clientSession);
     }
 

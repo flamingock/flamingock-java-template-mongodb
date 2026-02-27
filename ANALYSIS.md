@@ -28,11 +28,10 @@ YAML -> MongoOperation (deserialized) -> MongoOperationValidator -> MongoOperati
 
 ## 2. Top 10 Issues (Ranked by Severity)
 
-### #1 - CRITICAL: Rollback path skips validation entirely
-**File:** `MongoChangeTemplate.java:101-105`
-**Impact:** A malformed rollback YAML (wrong type, missing collection, injection via `$` in collection name) executes without any validation check. The apply path validates via `MongoOperationValidator.validate()` at line 93, but the rollback method directly calls `rollbackPayload.getOperator(db).apply(clientSession)` without any validation.
-**Risk:** A rollback triggered during a production failure will amplify damage if the rollback YAML itself is malformed. The exact scenario where you need rollback to work perfectly is the scenario where it's least tested.
-**Fix:** Call `MongoOperationValidator.validate(rollbackPayload, changeId)` in the `rollback()` method before executing.
+### #1 - ~~CRITICAL: Rollback path skips validation entirely~~ RESOLVED
+**Status:** Fixed by validation refactoring.
+**Original issue:** `MongoChangeTemplate.rollback()` did not call `MongoOperationValidator.validate()` before executing, so malformed rollback YAML ran unchecked.
+**Resolution:** Structural validation was moved into `MongoOperation.validate()` (implementing the `TemplatePayload` interface). The Flamingock framework now calls `validate()` on both apply and rollback payloads at load time via `AbstractTemplateLoadedChange.getValidationErrors()`, which invokes `validateApplyPayload()` and `validateRollbackPayload()` before any change executes. The separate `MongoOperationValidator`, `ValidationError`, and `MongoTemplateValidationException` classes were deleted as part of this refactoring. Validation is no longer a responsibility of the template's `apply()`/`rollback()` methods — the framework handles it uniformly for all payloads.
 
 ### #2 - HIGH: InsertOperator silently swallows null/empty documents, bypassing validation
 **File:** `InsertOperator.java:37-39`
