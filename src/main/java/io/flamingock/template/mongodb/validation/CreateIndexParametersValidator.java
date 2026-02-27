@@ -53,6 +53,12 @@ public class CreateIndexParametersValidator implements OperationValidator {
                     "'keys' cannot be empty"));
         }
 
+        Object options = params.get("options");
+        if (options != null && !(options instanceof Map)) {
+            errors.add(new TemplatePayloadValidationError("parameters.options",
+                    "'options' must be a document"));
+        }
+
         return errors;
     }
 }

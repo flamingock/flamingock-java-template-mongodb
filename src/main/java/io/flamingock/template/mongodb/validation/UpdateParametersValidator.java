@@ -35,9 +35,13 @@ public class UpdateParametersValidator implements OperationValidator {
             return errors;
         }
 
-        if (!params.containsKey("filter")) {
+        Object filter = params.get("filter");
+        if (filter == null) {
             errors.add(new TemplatePayloadValidationError("parameters.filter",
                     "Update operation requires 'filter' parameter"));
+        } else if (!(filter instanceof Map)) {
+            errors.add(new TemplatePayloadValidationError("parameters.filter",
+                    "'filter' must be a document"));
         }
 
         Object update = params.get("update");
@@ -47,6 +51,12 @@ public class UpdateParametersValidator implements OperationValidator {
         } else if (!(update instanceof Map)) {
             errors.add(new TemplatePayloadValidationError("parameters.update",
                     "'update' must be a document"));
+        }
+
+        Object options = params.get("options");
+        if (options != null && !(options instanceof Map)) {
+            errors.add(new TemplatePayloadValidationError("parameters.options",
+                    "'options' must be a document"));
         }
 
         return errors;

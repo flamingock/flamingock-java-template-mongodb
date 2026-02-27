@@ -218,6 +218,28 @@ class MongoOperationValidateTest {
         }
 
         @Test
+        @DisplayName("WHEN insert options is wrong type THEN validation fails")
+        void insertOptionsWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("insert");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            List<Map<String, Object>> docs = new ArrayList<>();
+            Map<String, Object> doc = new HashMap<>();
+            doc.put("name", "Test");
+            docs.add(doc);
+            params.put("documents", docs);
+            params.put("options", "not a document");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a document"));
+        }
+
+        @Test
         @DisplayName("WHEN insert is valid THEN validation passes")
         void insertValidTest() {
             MongoOperation op = new MongoOperation();
@@ -311,6 +333,47 @@ class MongoOperationValidateTest {
         }
 
         @Test
+        @DisplayName("WHEN update filter is wrong type THEN validation fails")
+        void updateFilterWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("update");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("filter", "not a document");
+            Map<String, Object> update = new HashMap<>();
+            update.put("$set", new HashMap<>());
+            params.put("update", update);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.filter", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a document"));
+        }
+
+        @Test
+        @DisplayName("WHEN update options is wrong type THEN validation fails")
+        void updateOptionsWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("update");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("filter", new HashMap<>());
+            Map<String, Object> update = new HashMap<>();
+            update.put("$set", new HashMap<>());
+            params.put("update", update);
+            params.put("options", "not a document");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a document"));
+        }
+
+        @Test
         @DisplayName("WHEN update missing both filter and update THEN both errors reported")
         void updateMissingBothTest() {
             MongoOperation op = new MongoOperation();
@@ -361,6 +424,23 @@ class MongoOperationValidateTest {
             assertEquals(1, errors.size());
             assertEquals("parameters.filter", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("requires 'filter'"));
+        }
+
+        @Test
+        @DisplayName("WHEN delete filter is wrong type THEN validation fails")
+        void deleteFilterWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("delete");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("filter", "not a document");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.filter", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a document"));
         }
 
         @Test
@@ -465,6 +545,26 @@ class MongoOperationValidateTest {
         }
 
         @Test
+        @DisplayName("WHEN createIndex options is wrong type THEN validation fails")
+        void createIndexOptionsWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createIndex");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            Map<String, Object> keys = new HashMap<>();
+            keys.put("email", 1);
+            params.put("keys", keys);
+            params.put("options", "not a document");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a document"));
+        }
+
+        @Test
         @DisplayName("WHEN createIndex is valid THEN validation passes")
         void createIndexValidTest() {
             MongoOperation op = new MongoOperation();
@@ -498,6 +598,40 @@ class MongoOperationValidateTest {
 
             assertEquals(1, errors.size());
             assertTrue(errors.get(0).getMessage().contains("'indexName' or 'keys'"));
+        }
+
+        @Test
+        @DisplayName("WHEN dropIndex keys is wrong type THEN validation fails")
+        void dropIndexKeysWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("dropIndex");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("keys", "not a map");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.keys", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a map"));
+        }
+
+        @Test
+        @DisplayName("WHEN dropIndex indexName is wrong type THEN validation fails")
+        void dropIndexIndexNameWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("dropIndex");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("indexName", 123);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.indexName", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a string"));
         }
 
         @Test
@@ -567,6 +701,24 @@ class MongoOperationValidateTest {
             assertEquals(1, errors.size());
             assertEquals("parameters.target", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("cannot be null or empty"));
+        }
+
+        @Test
+        @DisplayName("WHEN renameCollection options is wrong type THEN validation fails")
+        void renameCollectionOptionsWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("renameCollection");
+            op.setCollection("oldName");
+            Map<String, Object> params = new HashMap<>();
+            params.put("target", "newName");
+            params.put("options", "not a document");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a document"));
         }
 
         @Test
@@ -654,6 +806,25 @@ class MongoOperationValidateTest {
             assertEquals(1, errors.size());
             assertEquals("parameters.pipeline", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("must be a list"));
+        }
+
+        @Test
+        @DisplayName("WHEN createView options is wrong type THEN validation fails")
+        void createViewOptionsWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createView");
+            op.setCollection("testView");
+            Map<String, Object> params = new HashMap<>();
+            params.put("viewOn", "sourceCollection");
+            params.put("pipeline", Collections.singletonList(new HashMap<>()));
+            params.put("options", "not a document");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a document"));
         }
 
         @Test
