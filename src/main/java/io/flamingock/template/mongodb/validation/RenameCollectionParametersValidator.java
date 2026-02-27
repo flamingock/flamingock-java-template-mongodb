@@ -44,6 +44,16 @@ public class RenameCollectionParametersValidator implements OperationValidator {
         if (target == null || (target instanceof String && ((String) target).trim().isEmpty())) {
             errors.add(new TemplatePayloadValidationError("parameters.target",
                     "'target' cannot be null or empty"));
+        } else if (target instanceof String) {
+            String targetStr = (String) target;
+            if (targetStr.contains("$")) {
+                errors.add(new TemplatePayloadValidationError("parameters.target",
+                        "'target' collection name cannot contain '$': " + targetStr));
+            }
+            if (targetStr.contains("\0")) {
+                errors.add(new TemplatePayloadValidationError("parameters.target",
+                        "'target' collection name cannot contain null character"));
+            }
         }
 
         Object options = params.get("options");

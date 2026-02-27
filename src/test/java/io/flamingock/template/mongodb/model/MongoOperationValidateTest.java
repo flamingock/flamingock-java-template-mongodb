@@ -724,6 +724,40 @@ class MongoOperationValidateTest {
         }
 
         @Test
+        @DisplayName("WHEN renameCollection target contains $ THEN validation fails")
+        void renameCollectionTargetWithDollarSignTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("renameCollection");
+            op.setCollection("oldName");
+            Map<String, Object> params = new HashMap<>();
+            params.put("target", "new$Name");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.target", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("cannot contain '$'"));
+        }
+
+        @Test
+        @DisplayName("WHEN renameCollection target contains null char THEN validation fails")
+        void renameCollectionTargetWithNullCharTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("renameCollection");
+            op.setCollection("oldName");
+            Map<String, Object> params = new HashMap<>();
+            params.put("target", "new\0Name");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.target", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("null character"));
+        }
+
+        @Test
         @DisplayName("WHEN renameCollection options is wrong type THEN validation fails")
         void renameCollectionOptionsWrongTypeTest() {
             MongoOperation op = new MongoOperation();
