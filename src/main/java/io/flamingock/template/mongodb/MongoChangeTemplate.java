@@ -22,6 +22,7 @@ import io.flamingock.api.annotations.ChangeTemplate;
 import io.flamingock.api.annotations.Nullable;
 import io.flamingock.api.annotations.Rollback;
 import io.flamingock.api.template.AbstractChangeTemplate;
+import io.flamingock.api.template.wrappers.TemplateVoid;
 import io.flamingock.template.mongodb.model.MongoOperation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,7 +74,7 @@ import org.slf4j.LoggerFactory;
  * @see MongoOperation
  */
 @ChangeTemplate( name = "mongodb-sync-template", multiStep = true)
-public class MongoChangeTemplate extends AbstractChangeTemplate<Void, MongoOperation, MongoOperation> {
+public class MongoChangeTemplate extends AbstractChangeTemplate<TemplateVoid, MongoOperation, MongoOperation> {
 
     private static final Logger log = LoggerFactory.getLogger(MongoChangeTemplate.class);
 
