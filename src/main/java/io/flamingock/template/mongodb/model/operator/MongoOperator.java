@@ -17,6 +17,7 @@ package io.flamingock.template.mongodb.model.operator;
 
 import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoDatabase;
+import io.flamingock.template.mongodb.MongoTemplateExecutionException;
 import io.flamingock.template.mongodb.model.MongoOperation;
 import io.flamingock.internal.util.log.FlamingockLoggerFactory;
 import org.slf4j.Logger;
@@ -36,7 +37,13 @@ public abstract class MongoOperator {
 
     public final void apply(ClientSession clientSession) {
         logOperation(clientSession != null);
-        applyInternal(clientSession);
+        try {
+            applyInternal(clientSession);
+        } catch (MongoTemplateExecutionException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new MongoTemplateExecutionException(op.getType(), op.getCollection(), e);
+        }
     }
 
     private void logOperation(boolean withClientSession) {

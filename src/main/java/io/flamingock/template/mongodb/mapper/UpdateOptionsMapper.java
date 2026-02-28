@@ -17,12 +17,20 @@ package io.flamingock.template.mongodb.mapper;
 
 import com.mongodb.client.model.UpdateOptions;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import static io.flamingock.template.mongodb.mapper.MapperUtil.getBoolean;
 import static io.flamingock.template.mongodb.mapper.MapperUtil.getCollation;
 
 public final class UpdateOptionsMapper {
+
+    public static final Set<String> RECOGNIZED_KEYS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "upsert", "bypassDocumentValidation", "collation", "arrayFilters"
+    )));
 
     private UpdateOptionsMapper() {}
 

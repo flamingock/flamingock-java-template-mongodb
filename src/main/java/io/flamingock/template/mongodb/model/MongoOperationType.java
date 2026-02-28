@@ -34,6 +34,7 @@ import io.flamingock.template.mongodb.validation.DeleteParametersValidator;
 import io.flamingock.template.mongodb.validation.DropIndexParametersValidator;
 import io.flamingock.template.mongodb.validation.InsertParametersValidator;
 import io.flamingock.template.mongodb.validation.ModifyCollectionParametersValidator;
+import io.flamingock.template.mongodb.validation.NoParametersValidator;
 import io.flamingock.template.mongodb.validation.OperationValidator;
 import io.flamingock.template.mongodb.validation.RenameCollectionParametersValidator;
 import io.flamingock.template.mongodb.validation.UpdateParametersValidator;
@@ -44,17 +45,17 @@ import java.util.function.BiFunction;
 
 public enum MongoOperationType {
 
-    CREATE_COLLECTION("createCollection", CreateCollectionOperator::new, OperationValidator.NO_OP),
+    CREATE_COLLECTION("createCollection", CreateCollectionOperator::new, new NoParametersValidator("CreateCollection")),
     CREATE_INDEX("createIndex", CreateIndexOperator::new, new CreateIndexParametersValidator()),
     INSERT("insert", InsertOperator::new, new InsertParametersValidator()),
     UPDATE("update", UpdateOperator::new, new UpdateParametersValidator()),
     DELETE("delete", DeleteOperator::new, new DeleteParametersValidator()),
-    DROP_COLLECTION("dropCollection", DropCollectionOperator::new, OperationValidator.NO_OP),
+    DROP_COLLECTION("dropCollection", DropCollectionOperator::new, new NoParametersValidator("DropCollection")),
     DROP_INDEX("dropIndex", DropIndexOperator::new, new DropIndexParametersValidator()),
     RENAME_COLLECTION("renameCollection", RenameCollectionOperator::new, new RenameCollectionParametersValidator()),
     MODIFY_COLLECTION("modifyCollection", ModifyCollectionOperator::new, new ModifyCollectionParametersValidator()),
     CREATE_VIEW("createView", CreateViewOperator::new, new CreateViewParametersValidator()),
-    DROP_VIEW("dropView", DropViewOperator::new, OperationValidator.NO_OP);
+    DROP_VIEW("dropView", DropViewOperator::new, new NoParametersValidator("DropView"));
 
     private final String value;
     private final BiFunction<MongoDatabase, MongoOperation, MongoOperator> createOperatorFunction;

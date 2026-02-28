@@ -17,11 +17,15 @@ package io.flamingock.template.mongodb.mapper;
 
 import com.mongodb.client.model.RenameCollectionOptions;
 
+import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 import static io.flamingock.template.mongodb.mapper.MapperUtil.getBoolean;
 
 public final class RenameCollectionOptionsMapper {
+
+    public static final Set<String> RECOGNIZED_KEYS = Collections.singleton("dropTarget");
 
     private RenameCollectionOptionsMapper() {}
 

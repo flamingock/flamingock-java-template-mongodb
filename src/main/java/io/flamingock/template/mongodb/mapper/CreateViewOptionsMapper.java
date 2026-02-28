@@ -17,11 +17,15 @@ package io.flamingock.template.mongodb.mapper;
 
 import com.mongodb.client.model.CreateViewOptions;
 
+import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 import static io.flamingock.template.mongodb.mapper.MapperUtil.getCollation;
 
 public final class CreateViewOptionsMapper {
+
+    public static final Set<String> RECOGNIZED_KEYS = Collections.singleton("collation");
 
     private CreateViewOptionsMapper() {}
 

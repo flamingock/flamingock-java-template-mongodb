@@ -25,7 +25,7 @@ Structural validation runs at **load time** — before any change executes — v
 - `MongoOperationType` — Enum with 11 operations + factory + validator binding
 - `CollectionValidator` — Validates collection name (null, empty, `$`, `\0`)
 - `OperationValidator` — Interface for per-operation parameter validators + unrecognized key utility
-- 8 parameter validators (`InsertParametersValidator`, `UpdateParametersValidator`, `DeleteParametersValidator`, `CreateIndexParametersValidator`, `DropIndexParametersValidator`, `RenameCollectionParametersValidator`, `CreateViewParametersValidator`, `ModifyCollectionParametersValidator`)
+- 8 parameter validators (`InsertParametersValidator`, `UpdateParametersValidator`, `DeleteParametersValidator`, `CreateIndexParametersValidator`, `DropIndexParametersValidator`, `RenameCollectionParametersValidator`, `CreateViewParametersValidator`, `ModifyCollectionParametersValidator`) + `NoParametersValidator` for operations that don't accept parameters
 - 11 operator classes (`CreateCollectionOperator`, `InsertOperator`, etc.)
 - 7 mapper classes (`IndexOptionsMapper`, `InsertOptionsMapper`, `UpdateOptionsMapper`, `CreateViewOptionsMapper`, `RenameCollectionOptionsMapper`, `MapperUtil`, `BsonConverter`)
 
@@ -81,8 +81,8 @@ All 10 issues identified in the original analysis have been resolved through mul
 
 | Operation        | Enum Value          | Operator Class             | Transactional |                     Validation                      |         Options Mapper          |     Session Handling      |           Operator Test            |        Integration Test        |
 |------------------|---------------------|----------------------------|:-------------:|:---------------------------------------------------:|:-------------------------------:|:-------------------------:|:----------------------------------:|:------------------------------:|
-| createCollection | `CREATE_COLLECTION` | `CreateCollectionOperator` |      No       |                   collection only                   |              None               | Ignores (base class logs) | `CreateCollectionOperatorTest` (2) |          YAML `_0001`          |
-| dropCollection   | `DROP_COLLECTION`   | `DropCollectionOperator`   |      No       |                   collection only                   |              None               | Ignores (base class logs) |  `DropCollectionOperatorTest` (2)  |     YAML `_0004` rollback      |
+| createCollection | `CREATE_COLLECTION` | `CreateCollectionOperator` |      No       |            NoParametersValidator                    |              None               | Ignores (base class logs) | `CreateCollectionOperatorTest` (2) |          YAML `_0001`          |
+| dropCollection   | `DROP_COLLECTION`   | `DropCollectionOperator`   |      No       |            NoParametersValidator                    |              None               | Ignores (base class logs) |  `DropCollectionOperatorTest` (2)  |     YAML `_0004` rollback      |
 | insert           | `INSERT`            | `InsertOperator`           |      Yes      |              Full (documents, options)              |      `InsertOptionsMapper`      |           Full            |      `InsertOperatorTest` (4)      | YAML `_0002`, `_0003`, `_0005` |
 | update           | `UPDATE`            | `UpdateOperator`           |      Yes      |           Full (filter, update, options)            |      `UpdateOptionsMapper`      |           Full            |      `UpdateOperatorTest` (7)      |              None              |
 | delete           | `DELETE`            | `DeleteOperator`           |      Yes      |                Full (filter, multi)                 |              None               |           Full            |      `DeleteOperatorTest` (6)      |     YAML `_0002` rollback      |
@@ -91,14 +91,15 @@ All 10 issues identified in the original analysis have been resolved through mul
 | renameCollection | `RENAME_COLLECTION` | `RenameCollectionOperator` |      No       |               Full (target, options)                | `RenameCollectionOptionsMapper` | Ignores (base class logs) | `RenameCollectionOperatorTest` (2) |              None              |
 | modifyCollection | `MODIFY_COLLECTION` | `ModifyCollectionOperator` |      No       | Full (validator, validationLevel, validationAction) |              None               | Ignores (base class logs) | `ModifyCollectionOperatorTest` (2) |              None              |
 | createView       | `CREATE_VIEW`       | `CreateViewOperator`       |      No       |          Full (viewOn, pipeline, options)           |    `CreateViewOptionsMapper`    | Ignores (base class logs) |    `CreateViewOperatorTest` (2)    |              None              |
-| dropView         | `DROP_VIEW`         | `DropViewOperator`         |      No       |                   collection only                   |              None               | Ignores (base class logs) |     `DropViewOperatorTest` (2)     |              None              |
+| dropView         | `DROP_VIEW`         | `DropViewOperator`         |      No       |            NoParametersValidator                    |              None               | Ignores (base class logs) |     `DropViewOperatorTest` (2)     |              None              |
 
 ### Coverage Notes:
 - **5 of 11 operations** have integration test coverage via YAML changes (createCollection, insert, delete, createIndex, dropIndex)
 - **6 operations** are only tested at the operator unit level: update, renameCollection, modifyCollection, createView, dropView, dropCollection (though dropCollection appears in YAML rollback steps)
 - **0 operations** are tested with `ClientSession` (transactional path) — framework integration tests cover this implicitly
-- All 11 operations now have comprehensive load-time validation via `MongoOperation.validate()`
+- All 11 operations now have comprehensive load-time validation via `MongoOperation.validate()`, including unrecognized option key detection for the 5 operations that support `options`
 - All 8 DDL operators now consistently delegate session handling to the base class `MongoOperator.logOperation()`
+- All operators wrap MongoDB driver exceptions with template-level context via `MongoTemplateExecutionException`
 
 ---
 
@@ -109,7 +110,7 @@ All 10 issues identified in the original analysis have been resolved through mul
 | Test Class                          | Test Count |                  Type                  | Docker Required |
 |-------------------------------------|:----------:|:--------------------------------------:|:---------------:|
 | `MongoChangeTemplateTest`           |     6      | Integration (full Flamingock pipeline) |       Yes       |
-| `MongoOperationValidateTest`        |     81     |   Unit (pure logic, nested classes)    |       No        |
+| `MongoOperationValidateTest`        |     94     |   Unit (pure logic, nested classes)    |       No        |
 | `InsertOperatorTest`                |     4      |      Integration (operator-level)      |       Yes       |
 | `UpdateOperatorTest`                |     7      |      Integration (operator-level)      |       Yes       |
 | `DeleteOperatorTest`                |     6      |      Integration (operator-level)      |       Yes       |
@@ -128,9 +129,10 @@ All 10 issues identified in the original analysis have been resolved through mul
 | `UpdateOptionsMapperTest`           |     8      |                  Unit                  |       No        |
 | `RenameCollectionOptionsMapperTest` |     4      |                  Unit                  |       No        |
 | `CreateViewOptionsMapperTest`       |     3      |                  Unit                  |       No        |
-| **Total**                           |  **~207**  |                                        |                 |
+| `MongoOperatorExceptionWrappingTest`|     5      |                  Unit                  |       No        |
+| **Total**                           |  **~225**  |                                        |                 |
 
-Unit tests (no Docker): ~162 | Integration tests (Docker required): ~45
+Unit tests (no Docker): ~180 | Integration tests (Docker required): ~45
 
 ### 4.2 Remaining Test Gaps
 
@@ -164,7 +166,7 @@ No test verifies behavior when operations are re-applied (e.g., `createCollectio
 | Null input handling             |    GOOD     | Validators catch null parameters at load time. `MongoOperation.validate()` handles null type, null collection, null parameters. Type checks prevent NPEs in getters                                                    |
 | Type safety                     |    GOOD     | Top-level parameters and nested elements are type-checked. Insert documents and createView pipeline stages are validated as Maps via `checkListElementTypes()`. Update `multi` is validated as Boolean. See section 5.1 (all resolved) |
 | Error collection (vs fail-fast) |    GOOD     | Individual validators collect all errors per operation. `MongoOperation.validate()` aggregates errors from `CollectionValidator` + `OperationValidator`. Framework collects across all payloads before any change runs |
-| Exception hierarchy             |    GOOD     | Uses the framework's `TemplatePayloadValidationError` with structured field/message pairs. No custom exception classes needed — the framework handles error presentation                                               |
+| Exception hierarchy             |    GOOD     | Uses the framework's `TemplatePayloadValidationError` with structured field/message pairs for validation. `MongoTemplateExecutionException` wraps driver exceptions with operation type and collection context           |
 | Logging                         |    GOOD     | `MongoOperator` base class logs transactional/non-transactional status for every operation. Clear INFO message when a non-transactional operation receives a session                                                   |
 | Immutability                    |    WEAK     | `MongoOperation` is fully mutable (public setters). No defensive copying of `parameters` map. Acceptable since instances are per-change and not shared                                                                 |
 | Thread safety                   |     N/A     | Template instances are per-execution, not shared. Static logger is safe                                                                                                                                                |
@@ -221,21 +223,24 @@ No operator handles pre-existing state. This is critical for **retry scenarios**
 
 **Summary:** 4 operations need idempotency handling (`createCollection` is the most critical), 5 are already idempotent, 2 should remain non-idempotent (the failure is meaningful).
 
-### 5.3 Silent Validation Gaps
+### 5.3 Silent Validation Gaps — ALL RESOLVED
 
-These are cases where **invalid or unexpected YAML is silently accepted** rather than flagged — the operation succeeds but doesn't do what the user intended.
+All 3 gaps identified below have been resolved. Operations now reject unrecognized parameters and option keys at load time, and MongoDB driver exceptions are wrapped with template-level context.
 
-#### #1 — `createCollection`, `dropCollection`, `dropView` accept unrecognized parameters silently
+#### #1 — ~~`createCollection`, `dropCollection`, `dropView` accept unrecognized parameters silently~~ RESOLVED
 **Severity: MEDIUM**
-These three operations use `OperationValidator.NO_OP`, so their `parameters` map is never inspected. YAML like `createCollection` with `parameters: { capped: true }` is silently ignored — the user thinks they created a capped collection but they didn't. Every other operation catches typos via `checkUnrecognizedKeys`, but these three don't. At minimum, they should warn when unexpected parameters are present.
+**Original issue:** These three operations used `OperationValidator.NO_OP`, so their `parameters` map was never inspected. YAML like `createCollection` with `parameters: { capped: true }` was silently ignored.
+**Resolution:** Replaced `OperationValidator.NO_OP` with `NoParametersValidator` for all three operations. Non-null, non-empty parameters now produce `"X operation does not accept parameters"`. Empty parameters (`{}`) and null are still accepted. The `NO_OP` constant was removed from `OperationValidator`.
 
-#### #2 — Option mappers silently ignore unrecognized option keys
+#### #2 — ~~Option mappers silently ignore unrecognized option keys~~ RESOLVED
 **Severity: MEDIUM**
-All 5 option mappers (`IndexOptionsMapper`, `InsertOptionsMapper`, `UpdateOptionsMapper`, `CreateViewOptionsMapper`, `RenameCollectionOptionsMapper`) only process known keys and silently skip everything else. YAML like `options: { banana: true }` is discarded without any feedback. The user believes they configured an option but nothing happened. This is the same class of problem that `checkUnrecognizedKeys` solves for top-level parameters, but it's not applied inside `options`.
+**Original issue:** All 5 option mappers only processed known keys and silently skipped everything else. YAML like `options: { banana: true }` was discarded without feedback.
+**Resolution:** Added `RECOGNIZED_KEYS` constant to all 5 option mappers (`IndexOptionsMapper`: 20 keys, `InsertOptionsMapper`: 2, `UpdateOptionsMapper`: 4, `CreateViewOptionsMapper`: 1, `RenameCollectionOptionsMapper`: 1). Added `checkUnrecognizedOptionKeys()` utility to `OperationValidator`. All 5 parameter validators that handle `options` now validate option keys when the options map is valid, producing errors like `"X operation does not recognize option 'key'"`.
 
-#### #3 — No operator wraps MongoDB driver exceptions with context
+#### #3 — ~~No operator wraps MongoDB driver exceptions with context~~ RESOLVED
 **Severity: LOW**
-When a MongoDB driver operation fails (e.g., `MongoCommandException`, `MongoBulkWriteException`), the raw exception bubbles up with no indication of which operation in a multi-step change failed or what YAML produced it. For a single-step change this is manageable, but for multi-step changes with 10+ operations, debugging requires matching stack traces to YAML manually.
+**Original issue:** Raw MongoDB driver exceptions bubbled up with no indication of which operation in a multi-step change failed.
+**Resolution:** `MongoOperator.apply()` now wraps `applyInternal()` exceptions in `MongoTemplateExecutionException`, which includes the operation type and collection name: `"Failed to execute '<type>' on collection '<collection>': <causeMessage>"`. Already-wrapped exceptions are re-thrown without double-wrapping. The original exception is preserved as the cause.
 
 ---
 
@@ -331,25 +336,25 @@ Only `validator`, `validationLevel`, and `validationAction` are supported. Missi
 | Category                       |  Weight  | Score (1-10) |   Weighted   |
 |--------------------------------|:--------:|:------------:|:------------:|
 | Architecture & Design          |   15%    |      9       |     1.35     |
-| Implementation Correctness     |   15%    |      7       |     1.05     |
-| Validation & Error Handling    |   20%    |      7       |     1.40     |
+| Implementation Correctness     |   15%    |      8       |     1.20     |
+| Validation & Error Handling    |   20%    |      8       |     1.60     |
 | Template Feature Completeness  |   15%    |      6       |     0.90     |
 | Test Coverage                  |   20%    |      6       |     1.20     |
 | Security & Safety              |   10%    |      8       |     0.80     |
 | Code Quality & Maintainability |    5%    |      8       |     0.40     |
-| **Total**                      | **100%** |              | **7.1 / 10** |
+| **Total**                      | **100%** |              | **7.45 / 10** |
 
 ### Score Justification
 
 **Architecture (9/10):** Solid layered design with clean separation of concerns. The validation architecture was significantly improved by leveraging the framework's `TemplatePayload` contract — load-time validation is now built into the data model rather than being a separate step. Enum factory with validator binding is elegant. Template method pattern in operators is well-designed.
 
-**Implementation Correctness (7/10):** All 10 original correctness issues have been resolved. Rollback validation is now handled by the framework. All operators have correct transactional flags. Collation mapping works for YAML input. Delete supports `deleteOne`/`deleteMany`. However, **4 of 11 operations are not idempotent** and will fail on retry in multi-step changes (section 5.2). `createCollection` is the most critical — it throws `MongoCommandException` if the collection already exists. No operator wraps MongoDB driver exceptions with context, making failures in multi-step changes hard to debug (section 5.3 #3).
+**Implementation Correctness (8/10):** All 10 original correctness issues have been resolved. Rollback validation is now handled by the framework. All operators have correct transactional flags. Collation mapping works for YAML input. Delete supports `deleteOne`/`deleteMany`. MongoDB driver exceptions are now wrapped with template-level context (`MongoTemplateExecutionException`) for easier debugging of multi-step changes. However, **4 of 11 operations are not idempotent** and will fail on retry in multi-step changes (section 5.2). `createCollection` is the most critical — it throws `MongoCommandException` if the collection already exists.
 
-**Validation (7/10):** Good load-time validation architecture with 8 dedicated parameter validators + `CollectionValidator`. Top-level types are checked, unrecognized keys are rejected, nested element types are validated (insert documents, createView pipeline stages checked as Maps; update `multi` checked as Boolean), and multiple errors are collected. All 5 validation-to-execution gaps (section 5.1) have been resolved — `ClassCastException` paths are eliminated. Two remaining gaps reduce this score: (1) **3 operations accept unrecognized parameters silently** — `createCollection`, `dropCollection`, `dropView` use `NO_OP` validator (section 5.3 #1); (2) **option mappers silently ignore unrecognized keys** — `options: { banana: true }` is discarded without feedback (section 5.3 #2).
+**Validation (8/10):** Comprehensive load-time validation architecture with 8 dedicated parameter validators + `NoParametersValidator` + `CollectionValidator`. Top-level types are checked, unrecognized parameter keys are rejected, nested element types are validated (insert documents, createView pipeline stages checked as Maps; update `multi` checked as Boolean), and multiple errors are collected. All 5 validation-to-execution gaps (section 5.1) and all 3 silent validation gaps (section 5.3) have been resolved. `NoParametersValidator` now catches unexpected parameters on `createCollection`/`dropCollection`/`dropView`. Unrecognized option keys inside `options` are detected via `checkUnrecognizedOptionKeys` with `RECOGNIZED_KEYS` sets in all 5 mappers. The remaining deduction is for edge cases in option value validation (e.g., `unique: "yes"` instead of `true` is not caught at load time — only at mapper invocation).
 
 **Template Feature Completeness (6/10):** The template covers 11 MongoDB operations, which handles the most common change scenarios. However, feature gaps reduce the "no-code" value proposition: `delete` lacks `options` support (inconsistent with insert/update), `createCollection` accepts zero parameters (no capped/timeseries collections), `replaceOne` is missing entirely (semantically different from `update`), `modifyCollection` only exposes 3 of many `collMod` options, and `dropView` has no safety check against accidentally dropping real collections. See section 8 for details.
 
-**Test Coverage (6/10):** Dramatically expanded from the original analysis. 81 validation tests cover all 11 operations with type checks, missing parameters, unrecognized keys, nested element type checks, and error accumulation. 82 mapper unit tests cover all option conversions including collation. Operator tests expanded (UpdateOperatorTest: 7, DeleteOperatorTest: 6). However: zero transactional path tests, zero options-with-operator integration tests, and zero idempotency tests. ~207 total tests.
+**Test Coverage (6/10):** Dramatically expanded from the original analysis. 94 validation tests cover all 11 operations with type checks, missing parameters, unrecognized parameter keys, unrecognized option keys, no-parameter enforcement, nested element type checks, and error accumulation. 82 mapper unit tests cover all option conversions including collation. 5 exception wrapping tests verify `MongoTemplateExecutionException` behavior. Operator tests expanded (UpdateOperatorTest: 7, DeleteOperatorTest: 6). However: zero transactional path tests, zero options-with-operator integration tests, and zero idempotency tests. ~225 total tests.
 
 **Security (8/10):** Developer-authored context makes injection-style concerns not applicable. Collection name `$`/`\0` checks serve as guardrails, now applied to both `collection` and `target` parameters. `modifyCollection` parameters are validated against known values. YAML deserialization is delegated to the framework.
 
@@ -357,7 +362,7 @@ Only `validator`, `validationLevel`, and `validationAction` are supported. Missi
 
 ### Bottom Line
 
-The module has a **solid architecture and clean codebase**, but gaps remain in robustness and feature completeness. All 10 original correctness issues and all 5 validation-to-execution gaps have been resolved. However, two areas need attention before the template is fully production-ready: (1) **Idempotency** — 4 DDL operations fail on retry instead of skipping, making multi-step changes fragile (section 5.2); (2) **Feature gaps** — missing `replaceOne`, inconsistent options support, bare-bones `createCollection` (section 8). Minor validation gaps remain: 3 operations accept unrecognized parameters silently and option mappers ignore unknown keys (section 5.3). The module is **functional for simple and moderately complex changes** but needs idempotency hardening for robust multi-step scenarios.
+The module has a **solid architecture and clean codebase**, with comprehensive validation and error handling. All 10 original correctness issues, all 5 validation-to-execution gaps, and all 3 silent validation gaps have been resolved. MongoDB driver exceptions are now wrapped with template-level context for easier debugging. Two areas remain for future improvement: (1) **Idempotency** — 4 DDL operations fail on retry instead of skipping, making multi-step changes fragile (section 5.2); (2) **Feature gaps** — missing `replaceOne`, inconsistent options support, bare-bones `createCollection` (section 8). The module is **functional for simple and moderately complex changes** but needs idempotency hardening for robust multi-step scenarios.
 
 ---
 

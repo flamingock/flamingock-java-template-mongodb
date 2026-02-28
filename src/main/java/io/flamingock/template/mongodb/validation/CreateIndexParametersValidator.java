@@ -16,6 +16,7 @@
 package io.flamingock.template.mongodb.validation;
 
 import io.flamingock.api.template.TemplatePayloadValidationError;
+import io.flamingock.template.mongodb.mapper.IndexOptionsMapper;
 import io.flamingock.template.mongodb.model.MongoOperation;
 
 import java.util.ArrayList;
@@ -62,6 +63,11 @@ public class CreateIndexParametersValidator implements OperationValidator {
         if (options != null && !(options instanceof Map)) {
             errors.add(new TemplatePayloadValidationError("parameters.options",
                     "'options' must be a document"));
+        } else if (options instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> optionsMap = (Map<String, Object>) options;
+            errors.addAll(OperationValidator.checkUnrecognizedOptionKeys(
+                    optionsMap, IndexOptionsMapper.RECOGNIZED_KEYS, "CreateIndex"));
         }
 
         errors.addAll(OperationValidator.checkUnrecognizedKeys(params, RECOGNIZED_KEYS, "CreateIndex"));
