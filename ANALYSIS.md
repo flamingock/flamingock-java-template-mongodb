@@ -213,7 +213,33 @@ All 7 changes from the original analysis have been implemented across multiple P
 
 ---
 
-## 8. Code Quality Observations
+## 8. Template Feature Gaps
+
+The following are gaps at the **feature/template level** — not code quality issues, but limitations in what the template offers to users authoring YAML changes.
+
+### #1 — `delete` operation has no `options` support
+**Severity: MEDIUM**
+`insert` and `update` both support an `options` parameter (collation, bypass validation, etc.), but `delete` does not. A user has no way to specify collation for delete operations. This is an inconsistency in the template's API surface — all three DML operations should offer the same options capabilities.
+
+### #2 — `createCollection` accepts zero parameters
+**Severity: MEDIUM**
+Users cannot create capped collections (`capped`, `size`, `max`), timeseries collections, or set collection-level collation. These are common setup patterns that force fallback to programmatic changes, undermining the "no-code" premise of the template.
+
+### #3 — Missing `replaceOne` operation
+**Severity: MEDIUM**
+`update` modifies fields via operators (`$set`, `$unset`, etc.), but `replaceOne` replaces an entire document. These are semantically different MongoDB operations. A user who needs to replace a full document cannot express that in YAML.
+
+### #4 — `modifyCollection` only exposes 3 of many `collMod` options
+**Severity: LOW**
+Only `validator`, `validationLevel`, and `validationAction` are supported. Missing `expireAfterSeconds` (TTL modification), `changeStreamPreAndPostImages`, and others. This limits what collection modifications users can declare without falling back to programmatic changes.
+
+### #5 — `dropView` has no safety check against dropping real collections
+**Severity: LOW**
+`dropView` presumably calls `collection.drop()` with no verification that the target is actually a view. A user who accidentally provides a real collection name would silently destroy data. A pre-execution check against `listCollections` metadata could guard against this.
+
+---
+
+## 9. Code Quality Observations
 
 ### Positive
 - Clean separation of concerns: template / model / validation / operators / mappers
@@ -235,7 +261,7 @@ All 7 changes from the original analysis have been implemented across multiple P
 
 ---
 
-## 9. Final Score
+## 10. Final Score
 
 | Category                       |  Weight  | Score (1-10) |   Weighted   |
 |--------------------------------|:--------:|:------------:|:------------:|
