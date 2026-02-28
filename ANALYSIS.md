@@ -1,10 +1,10 @@
 # Flamingock MongoDB Template - Comprehensive Module Analysis
 
 **Module:** `flamingock-java-template-mongodb` v1.0.0-rc.1
-**Flamingock Core:** v1.1.0-rc.2
-**Java Target:** 8
-**MongoDB Driver:** 4.0.0 (compileOnly)
-**Last Updated:** 2026-02-27
+**Flamingock Core:** v1.2.0  
+**Java Target:** 8  
+**MongoDB Driver:** 4.0.0 (compileOnly)  
+**Last Updated:** 2026-02-27  
 
 ---
 
