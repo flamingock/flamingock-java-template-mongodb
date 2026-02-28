@@ -201,6 +201,42 @@ class MongoOperationValidateTest {
         }
 
         @Test
+        @DisplayName("WHEN insert document item is not a map THEN validation fails")
+        void insertDocumentNotMapTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("insert");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("documents", Arrays.asList("hello"));
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.documents[0]", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a document"));
+        }
+
+        @Test
+        @DisplayName("WHEN insert documents have mixed types THEN only non-map items fail")
+        void insertDocumentMixedTypesTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("insert");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            Map<String, Object> validDoc = new HashMap<>();
+            validDoc.put("name", "ok");
+            params.put("documents", Arrays.asList(validDoc, 123));
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.documents[1]", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a document"));
+        }
+
+        @Test
         @DisplayName("WHEN insert has documents as wrong type THEN validation fails")
         void insertDocumentsWrongTypeTest() {
             MongoOperation op = new MongoOperation();
@@ -371,6 +407,27 @@ class MongoOperationValidateTest {
             assertEquals(1, errors.size());
             assertEquals("parameters.options", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("must be a document"));
+        }
+
+        @Test
+        @DisplayName("WHEN update multi is wrong type THEN validation fails")
+        void updateMultiWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("update");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("filter", new HashMap<>());
+            Map<String, Object> update = new HashMap<>();
+            update.put("$set", new HashMap<>());
+            params.put("update", update);
+            params.put("multi", "yes");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.multi", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a boolean"));
         }
 
         @Test
@@ -655,6 +712,26 @@ class MongoOperationValidateTest {
         }
 
         @Test
+        @DisplayName("WHEN dropIndex has both indexName and keys THEN validation fails")
+        void dropIndexBothIndexNameAndKeysTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("dropIndex");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("indexName", "idx");
+            Map<String, Object> keys = new HashMap<>();
+            keys.put("field", 1);
+            params.put("keys", keys);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("not both"));
+        }
+
+        @Test
         @DisplayName("WHEN dropIndex has indexName THEN validation passes")
         void dropIndexWithIndexNameTest() {
             MongoOperation op = new MongoOperation();
@@ -860,6 +937,78 @@ class MongoOperationValidateTest {
             assertEquals(1, errors.size());
             assertEquals("parameters.pipeline", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("must be a list"));
+        }
+
+        @Test
+        @DisplayName("WHEN createView pipeline stage is not a map THEN validation fails")
+        void createViewPipelineStageNotMapTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createView");
+            op.setCollection("testView");
+            Map<String, Object> params = new HashMap<>();
+            params.put("viewOn", "sourceCollection");
+            params.put("pipeline", Arrays.asList("invalid"));
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.pipeline[0]", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a document"));
+        }
+
+        @Test
+        @DisplayName("WHEN createView viewOn contains $ THEN validation fails")
+        void createViewViewOnContainsDollarTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createView");
+            op.setCollection("testView");
+            Map<String, Object> params = new HashMap<>();
+            params.put("viewOn", "$cmd");
+            params.put("pipeline", Collections.singletonList(new HashMap<>()));
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.viewOn", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("$"));
+        }
+
+        @Test
+        @DisplayName("WHEN createView viewOn contains null char THEN validation fails")
+        void createViewViewOnContainsNullCharTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createView");
+            op.setCollection("testView");
+            Map<String, Object> params = new HashMap<>();
+            params.put("viewOn", "test\0collection");
+            params.put("pipeline", Collections.singletonList(new HashMap<>()));
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.viewOn", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("null character"));
+        }
+
+        @Test
+        @DisplayName("WHEN createView viewOn is wrong type THEN validation fails")
+        void createViewViewOnWrongTypeTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createView");
+            op.setCollection("testView");
+            Map<String, Object> params = new HashMap<>();
+            params.put("viewOn", 123);
+            params.put("pipeline", Collections.singletonList(new HashMap<>()));
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.viewOn", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("must be a string"));
         }
 
         @Test

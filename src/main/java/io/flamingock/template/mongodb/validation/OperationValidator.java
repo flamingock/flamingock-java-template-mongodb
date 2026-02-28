@@ -45,4 +45,22 @@ public interface OperationValidator {
         }
         return errors;
     }
+
+    static List<TemplatePayloadValidationError> checkListElementTypes(
+            List<?> list, String fieldPath, String elementName) {
+        List<TemplatePayloadValidationError> errors = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            Object item = list.get(i);
+            if (item == null) {
+                errors.add(new TemplatePayloadValidationError(
+                        fieldPath + "[" + i + "]",
+                        elementName + " at index " + i + " is null"));
+            } else if (!(item instanceof Map)) {
+                errors.add(new TemplatePayloadValidationError(
+                        fieldPath + "[" + i + "]",
+                        elementName + " at index " + i + " must be a document (key-value map)"));
+            }
+        }
+        return errors;
+    }
 }

@@ -58,6 +58,12 @@ public class UpdateParametersValidator implements OperationValidator {
                     "'update' must be a document"));
         }
 
+        Object multi = params.get("multi");
+        if (multi != null && !(multi instanceof Boolean)) {
+            errors.add(new TemplatePayloadValidationError("parameters.multi",
+                    "'multi' must be a boolean"));
+        }
+
         Object options = params.get("options");
         if (options != null && !(options instanceof Map)) {
             errors.add(new TemplatePayloadValidationError("parameters.options",

@@ -41,9 +41,26 @@ public class CreateViewParametersValidator implements OperationValidator {
         }
 
         Object viewOn = params.get("viewOn");
-        if (viewOn == null || (viewOn instanceof String && ((String) viewOn).trim().isEmpty())) {
+        if (viewOn == null) {
             errors.add(new TemplatePayloadValidationError("parameters.viewOn",
                     "CreateView operation requires 'viewOn' parameter"));
+        } else if (!(viewOn instanceof String)) {
+            errors.add(new TemplatePayloadValidationError("parameters.viewOn",
+                    "'viewOn' must be a string"));
+        } else {
+            String viewOnStr = ((String) viewOn).trim();
+            if (viewOnStr.isEmpty()) {
+                errors.add(new TemplatePayloadValidationError("parameters.viewOn",
+                        "'viewOn' cannot be empty"));
+            }
+            if (viewOnStr.contains("$")) {
+                errors.add(new TemplatePayloadValidationError("parameters.viewOn",
+                        "'viewOn' collection name cannot contain '$': " + viewOnStr));
+            }
+            if (viewOnStr.contains("\0")) {
+                errors.add(new TemplatePayloadValidationError("parameters.viewOn",
+                        "'viewOn' collection name cannot contain null character"));
+            }
         }
 
         Object pipeline = params.get("pipeline");
@@ -53,6 +70,9 @@ public class CreateViewParametersValidator implements OperationValidator {
         } else if (!(pipeline instanceof List)) {
             errors.add(new TemplatePayloadValidationError("parameters.pipeline",
                     "'pipeline' must be a list"));
+        } else {
+            errors.addAll(OperationValidator.checkListElementTypes(
+                    (List<?>) pipeline, "parameters.pipeline", "Pipeline stage"));
         }
 
         Object options = params.get("options");
