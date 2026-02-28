@@ -59,12 +59,7 @@ public class InsertParametersValidator implements OperationValidator {
                     "'documents' cannot be empty"));
         }
 
-        for (int i = 0; i < docList.size(); i++) {
-            if (docList.get(i) == null) {
-                errors.add(new TemplatePayloadValidationError("parameters.documents[" + i + "]",
-                        "Document at index " + i + " is null"));
-            }
-        }
+        errors.addAll(OperationValidator.checkListElementTypes(docList, "parameters.documents", "Document"));
 
         Object options = params.get("options");
         if (options != null && !(options instanceof Map)) {

@@ -4,7 +4,7 @@
 **Flamingock Core:** v1.2.0  
 **Java Target:** 8  
 **MongoDB Driver:** 4.0.0 (compileOnly)  
-**Last Updated:** 2026-02-27  
+**Last Updated:** 2026-02-28  
 
 ---
 
@@ -109,7 +109,7 @@ All 10 issues identified in the original analysis have been resolved through mul
 | Test Class                          | Test Count |                  Type                  | Docker Required |
 |-------------------------------------|:----------:|:--------------------------------------:|:---------------:|
 | `MongoChangeTemplateTest`           |     6      | Integration (full Flamingock pipeline) |       Yes       |
-| `MongoOperationValidateTest`        |     72     |   Unit (pure logic, nested classes)    |       No        |
+| `MongoOperationValidateTest`        |     81     |   Unit (pure logic, nested classes)    |       No        |
 | `InsertOperatorTest`                |     4      |      Integration (operator-level)      |       Yes       |
 | `UpdateOperatorTest`                |     7      |      Integration (operator-level)      |       Yes       |
 | `DeleteOperatorTest`                |     6      |      Integration (operator-level)      |       Yes       |
@@ -128,9 +128,9 @@ All 10 issues identified in the original analysis have been resolved through mul
 | `UpdateOptionsMapperTest`           |     8      |                  Unit                  |       No        |
 | `RenameCollectionOptionsMapperTest` |     4      |                  Unit                  |       No        |
 | `CreateViewOptionsMapperTest`       |     3      |                  Unit                  |       No        |
-| **Total**                           |  **~199**  |                                        |                 |
+| **Total**                           |  **~207**  |                                        |                 |
 
-Unit tests (no Docker): ~154 | Integration tests (Docker required): ~45
+Unit tests (no Docker): ~162 | Integration tests (Docker required): ~45
 
 ### 4.2 Remaining Test Gaps
 
@@ -148,7 +148,7 @@ No test verifies behavior when operations are re-applied (e.g., `createCollectio
 | Original Gap                          | Status   | How Resolved                                                                     |
 |---------------------------------------|----------|----------------------------------------------------------------------------------|
 | P0: Rollback validation               | RESOLVED | Framework calls `validate()` at load time for both apply and rollback payloads   |
-| P0: Validation-operator alignment     | RESOLVED | All parameter validators run `instanceof` type checks before getters are invoked |
+| P0: Validation-operator alignment     | RESOLVED | All parameter validators run `instanceof` type checks before getters are invoked (including nested element types) |
 | P0: CreateIndexOperator error message | RESOLVED | Redundant warning blocks removed; base class handles logging                     |
 | P1: modifyCollection tests            | RESOLVED | 13 dedicated validation tests in `MongoOperationValidateTest`                    |
 | P1: Edge case getters                 | RESOLVED | Type validation at load time prevents `ClassCastException` in getters            |
@@ -162,7 +162,7 @@ No test verifies behavior when operations are re-applied (e.g., `createCollectio
 | Criterion                       |   Status    | Details                                                                                                                                                                                                                |
 |---------------------------------|:-----------:|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Null input handling             |    GOOD     | Validators catch null parameters at load time. `MongoOperation.validate()` handles null type, null collection, null parameters. Type checks prevent NPEs in getters                                                    |
-| Type safety                     |   PARTIAL   | Top-level parameters are type-checked (`filter instanceof Map`, `documents instanceof List`, etc.), but **nested elements are not**. See section 5.1 for details                                                       |
+| Type safety                     |    GOOD     | Top-level parameters and nested elements are type-checked. Insert documents and createView pipeline stages are validated as Maps via `checkListElementTypes()`. Update `multi` is validated as Boolean. See section 5.1 (all resolved) |
 | Error collection (vs fail-fast) |    GOOD     | Individual validators collect all errors per operation. `MongoOperation.validate()` aggregates errors from `CollectionValidator` + `OperationValidator`. Framework collects across all payloads before any change runs |
 | Exception hierarchy             |    GOOD     | Uses the framework's `TemplatePayloadValidationError` with structured field/message pairs. No custom exception classes needed — the framework handles error presentation                                               |
 | Logging                         |    GOOD     | `MongoOperator` base class logs transactional/non-transactional status for every operation. Clear INFO message when a non-transactional operation receives a session                                                   |
@@ -172,29 +172,34 @@ No test verifies behavior when operations are re-applied (e.g., `createCollectio
 | Backwards compatibility         |    GOOD     | `compileOnly` MongoDB driver 4.0.0 is a low bar. Index options correctly throw `UnsupportedOperationException` for removed options (`bucketSize`, `wildcardProjection`, `hidden`)                                      |
 | Resource cleanup                |     N/A     | No resources to clean up. Operators use driver-level collections which are managed by the MongoDB client                                                                                                               |
 
-### 5.1 Validation-to-Execution Gaps
+### 5.1 Validation-to-Execution Gaps — ALL RESOLVED
 
-These are cases where **YAML passes load-time validation but fails at execution** with raw `ClassCastException` or driver errors instead of clear validation messages. The root cause is that validators check top-level parameter types but not the types of elements inside collections.
+All 5 gaps identified below have been resolved. Validators now check nested element types and parameter value constraints, preventing `ClassCastException` at execution time.
 
-#### #1 — Insert: document items not type-checked as Maps
+#### #1 — ~~Insert: document items not type-checked as Maps~~ RESOLVED
 **Severity: HIGH**
-`InsertParametersValidator` checks that `documents` is a non-empty `List` and each item is non-null, but never checks `instanceof Map`. YAML like `documents: ["hello", 123]` passes validation. At execution, `Document::new` receives a String → `ClassCastException`. The user gets an opaque runtime error instead of a clear validation message pointing to the malformed document.
+**Original issue:** `InsertParametersValidator` checked that `documents` is a non-empty `List` and each item is non-null, but never checked `instanceof Map`. YAML like `documents: ["hello", 123]` passed validation and produced `ClassCastException` at execution.
+**Resolution:** Replaced the manual null-check loop with `OperationValidator.checkListElementTypes()`, which validates both null and non-Map elements. Each invalid item produces a clear error like `"Document at index 0 must be a document (key-value map)"`.
 
-#### #2 — Update: `multi` parameter not type-checked
+#### #2 — ~~Update: `multi` parameter not type-checked~~ RESOLVED
 **Severity: HIGH**
-`DeleteParametersValidator` validates `multi instanceof Boolean`, but `UpdateParametersValidator` does not — it only includes `multi` in `RECOGNIZED_KEYS` to avoid an "unrecognized key" error. YAML like `multi: "yes"` passes validation. At execution, `isMulti()` does `(Boolean) multi` → `ClassCastException`. Inconsistent with the delete operation's validation.
+**Original issue:** `DeleteParametersValidator` validated `multi instanceof Boolean`, but `UpdateParametersValidator` did not. YAML like `multi: "yes"` passed validation and produced `ClassCastException` in `isMulti()`.
+**Resolution:** Added `instanceof Boolean` check for `multi` in `UpdateParametersValidator`, matching the existing pattern in `DeleteParametersValidator`. Invalid types produce `"'multi' must be a boolean"`.
 
-#### #3 — CreateView: pipeline elements not type-checked as Maps
+#### #3 — ~~CreateView: pipeline elements not type-checked as Maps~~ RESOLVED
 **Severity: MEDIUM**
-`CreateViewParametersValidator` checks `pipeline instanceof List` but not that each stage is a `Map`. YAML like `pipeline: ["invalid"]` passes validation. At execution, `Document::new` receives a String → `ClassCastException`.
+**Original issue:** `CreateViewParametersValidator` checked `pipeline instanceof List` but not that each stage is a `Map`. YAML like `pipeline: ["invalid"]` passed validation and produced `ClassCastException` at execution.
+**Resolution:** Added `OperationValidator.checkListElementTypes()` call after confirming pipeline is a List. Invalid stages produce `"Pipeline stage at index 0 must be a document (key-value map)"`.
 
-#### #4 — CreateView: `viewOn` not validated for `$`/`\0`
+#### #4 — ~~CreateView: `viewOn` not validated for `$`/`\0`~~ RESOLVED
 **Severity: LOW**
-`CollectionValidator` checks the `collection` field (the view name) for `$` and `\0`, and `RenameCollectionParametersValidator` checks the `target` parameter. But `viewOn` — also a collection name reference — bypasses these same checks. Inconsistent guardrails.
+**Original issue:** `CollectionValidator` checked the `collection` field for `$` and `\0`, and `RenameCollectionParametersValidator` checked `target`, but `viewOn` bypassed these checks.
+**Resolution:** Restructured `viewOn` validation to check type (`instanceof String`), empty value, `$`, and `\0` characters — matching the pattern used by `RenameCollectionParametersValidator` for `target`.
 
-#### #5 — DropIndex: silently ignores `keys` when both `indexName` and `keys` provided
+#### #5 — ~~DropIndex: silently ignores `keys` when both `indexName` and `keys` provided~~ RESOLVED
 **Severity: LOW**
-When both are present, `DropIndexOperator` uses `indexName` and silently discards `keys`. The user gets no validation error or warning that part of their YAML is being ignored. Could lead to confusion if the user intended `keys` but also included `indexName` by mistake.
+**Original issue:** When both were present, `DropIndexOperator` used `indexName` and silently discarded `keys`.
+**Resolution:** Added mutual exclusivity check in `DropIndexParametersValidator`. Providing both `indexName` and `keys` now produces `"DropIndex operation requires either 'indexName' or 'keys', not both"`.
 
 ### 5.2 Idempotency Gaps
 
@@ -327,12 +332,12 @@ Only `validator`, `validationLevel`, and `validationAction` are supported. Missi
 |--------------------------------|:--------:|:------------:|:------------:|
 | Architecture & Design          |   15%    |      9       |     1.35     |
 | Implementation Correctness     |   15%    |      7       |     1.05     |
-| Validation & Error Handling    |   20%    |      6       |     1.20     |
+| Validation & Error Handling    |   20%    |      7       |     1.40     |
 | Template Feature Completeness  |   15%    |      6       |     0.90     |
 | Test Coverage                  |   20%    |      6       |     1.20     |
 | Security & Safety              |   10%    |      8       |     0.80     |
 | Code Quality & Maintainability |    5%    |      8       |     0.40     |
-| **Total**                      | **100%** |              | **6.9 / 10** |
+| **Total**                      | **100%** |              | **7.1 / 10** |
 
 ### Score Justification
 
@@ -340,11 +345,11 @@ Only `validator`, `validationLevel`, and `validationAction` are supported. Missi
 
 **Implementation Correctness (7/10):** All 10 original correctness issues have been resolved. Rollback validation is now handled by the framework. All operators have correct transactional flags. Collation mapping works for YAML input. Delete supports `deleteOne`/`deleteMany`. However, **4 of 11 operations are not idempotent** and will fail on retry in multi-step changes (section 5.2). `createCollection` is the most critical — it throws `MongoCommandException` if the collection already exists. No operator wraps MongoDB driver exceptions with context, making failures in multi-step changes hard to debug (section 5.3 #3).
 
-**Validation (6/10):** Good load-time validation architecture with 8 dedicated parameter validators + `CollectionValidator`. Top-level types are checked, unrecognized keys are rejected, and multiple errors are collected. However, three layers of gaps reduce this score: (1) **nested element types are not checked** — insert documents, update `multi`, and createView pipeline stages can pass validation and produce `ClassCastException` at execution (section 5.1); (2) **3 operations accept unrecognized parameters silently** — `createCollection`, `dropCollection`, `dropView` use `NO_OP` validator (section 5.3 #1); (3) **option mappers silently ignore unrecognized keys** — `options: { banana: true }` is discarded without feedback (section 5.3 #2).
+**Validation (7/10):** Good load-time validation architecture with 8 dedicated parameter validators + `CollectionValidator`. Top-level types are checked, unrecognized keys are rejected, nested element types are validated (insert documents, createView pipeline stages checked as Maps; update `multi` checked as Boolean), and multiple errors are collected. All 5 validation-to-execution gaps (section 5.1) have been resolved — `ClassCastException` paths are eliminated. Two remaining gaps reduce this score: (1) **3 operations accept unrecognized parameters silently** — `createCollection`, `dropCollection`, `dropView` use `NO_OP` validator (section 5.3 #1); (2) **option mappers silently ignore unrecognized keys** — `options: { banana: true }` is discarded without feedback (section 5.3 #2).
 
 **Template Feature Completeness (6/10):** The template covers 11 MongoDB operations, which handles the most common change scenarios. However, feature gaps reduce the "no-code" value proposition: `delete` lacks `options` support (inconsistent with insert/update), `createCollection` accepts zero parameters (no capped/timeseries collections), `replaceOne` is missing entirely (semantically different from `update`), `modifyCollection` only exposes 3 of many `collMod` options, and `dropView` has no safety check against accidentally dropping real collections. See section 8 for details.
 
-**Test Coverage (6/10):** Dramatically expanded from the original analysis. 72 validation tests cover all 11 operations with type checks, missing parameters, unrecognized keys, and error accumulation. 82 mapper unit tests cover all option conversions including collation. Operator tests expanded (UpdateOperatorTest: 7, DeleteOperatorTest: 6). However: zero transactional path tests, zero options-with-operator integration tests, zero idempotency tests, and no coverage for the validation-to-execution gaps in sections 5.1–5.3. ~199 total tests.
+**Test Coverage (6/10):** Dramatically expanded from the original analysis. 81 validation tests cover all 11 operations with type checks, missing parameters, unrecognized keys, nested element type checks, and error accumulation. 82 mapper unit tests cover all option conversions including collation. Operator tests expanded (UpdateOperatorTest: 7, DeleteOperatorTest: 6). However: zero transactional path tests, zero options-with-operator integration tests, and zero idempotency tests. ~207 total tests.
 
 **Security (8/10):** Developer-authored context makes injection-style concerns not applicable. Collection name `$`/`\0` checks serve as guardrails, now applied to both `collection` and `target` parameters. `modifyCollection` parameters are validated against known values. YAML deserialization is delegated to the framework.
 
@@ -352,7 +357,7 @@ Only `validator`, `validationLevel`, and `validationAction` are supported. Missi
 
 ### Bottom Line
 
-The module has a **solid architecture and clean codebase**, but significant gaps remain in robustness, validation depth, and feature completeness. All 10 original correctness issues have been resolved. However, three areas need attention before the template is fully production-ready: (1) **Idempotency** — 4 DDL operations fail on retry instead of skipping, making multi-step changes fragile (section 5.2); (2) **Validation depth** — nested element types are not checked, and 3 operations plus all option mappers silently accept invalid input (sections 5.1, 5.3); (3) **Feature gaps** — missing `replaceOne`, inconsistent options support, bare-bones `createCollection` (section 8). The module is **functional for simple, single-operation changes** but needs hardening for complex multi-step scenarios.
+The module has a **solid architecture and clean codebase**, but gaps remain in robustness and feature completeness. All 10 original correctness issues and all 5 validation-to-execution gaps have been resolved. However, two areas need attention before the template is fully production-ready: (1) **Idempotency** — 4 DDL operations fail on retry instead of skipping, making multi-step changes fragile (section 5.2); (2) **Feature gaps** — missing `replaceOne`, inconsistent options support, bare-bones `createCollection` (section 8). Minor validation gaps remain: 3 operations accept unrecognized parameters silently and option mappers ignore unknown keys (section 5.3). The module is **functional for simple and moderately complex changes** but needs idempotency hardening for robust multi-step scenarios.
 
 ---
 
