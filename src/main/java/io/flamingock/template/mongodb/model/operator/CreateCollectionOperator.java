@@ -27,6 +27,10 @@ public class CreateCollectionOperator extends MongoOperator {
 
     @Override
     public void applyInternal(ClientSession clientSession) {
+        if (DatabaseInspector.collectionExists(mongoDatabase, op.getCollection())) {
+            logger.info("Collection '{}' already exists, skipping createCollection", op.getCollection());
+            return;
+        }
         mongoDatabase.createCollection(op.getCollection());
     }
 

@@ -34,6 +34,10 @@ public class CreateViewOperator extends MongoOperator {
 
     @Override
     protected void applyInternal(ClientSession clientSession) {
+        if (DatabaseInspector.collectionExists(mongoDatabase, op.getCollection())) {
+            logger.info("View '{}' already exists, skipping createView", op.getCollection());
+            return;
+        }
         CreateViewOptions options = CreateViewOptionsMapper.map(op.getOptions());
         mongoDatabase.createView(op.getCollection(), getViewOn(), getPipeline(), options);
     }

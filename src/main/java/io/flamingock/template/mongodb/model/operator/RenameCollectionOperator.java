@@ -30,7 +30,16 @@ public class RenameCollectionOperator extends MongoOperator {
 
     @Override
     protected void applyInternal(ClientSession clientSession) {
-        MongoNamespace target = new MongoNamespace(mongoDatabase.getName(), getTarget());
+        String targetName = getTarget();
+        boolean sourceExists = DatabaseInspector.collectionExists(mongoDatabase, op.getCollection());
+        boolean targetExists = DatabaseInspector.collectionExists(mongoDatabase, targetName);
+
+        if (!sourceExists && targetExists) {
+            logger.info("Collection '{}' already renamed to '{}', skipping renameCollection", op.getCollection(), targetName);
+            return;
+        }
+
+        MongoNamespace target = new MongoNamespace(mongoDatabase.getName(), targetName);
         RenameCollectionOptions options = RenameCollectionOptionsMapper.map(op.getOptions());
         mongoDatabase.getCollection(op.getCollection()).renameCollection(target, options);
     }

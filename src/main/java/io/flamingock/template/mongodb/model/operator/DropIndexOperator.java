@@ -29,8 +29,16 @@ public class DropIndexOperator extends MongoOperator {
     protected void applyInternal(ClientSession clientSession) {
         String indexName = getIndexName();
         if (indexName != null) {
+            if (!DatabaseInspector.indexExistsByName(mongoDatabase, op.getCollection(), indexName)) {
+                logger.info("Index '{}' does not exist on collection '{}', skipping dropIndex", indexName, op.getCollection());
+                return;
+            }
             mongoDatabase.getCollection(op.getCollection()).dropIndex(indexName);
         } else {
+            if (!DatabaseInspector.indexExistsByKeys(mongoDatabase, op.getCollection(), op.getKeys())) {
+                logger.info("Index with specified keys does not exist on collection '{}', skipping dropIndex", op.getCollection());
+                return;
+            }
             mongoDatabase.getCollection(op.getCollection()).dropIndex(op.getKeys());
         }
     }

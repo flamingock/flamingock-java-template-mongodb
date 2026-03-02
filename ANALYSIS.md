@@ -81,16 +81,16 @@ All 10 issues identified in the original analysis have been resolved through mul
 
 | Operation        | Enum Value          | Operator Class             | Transactional |                     Validation                      |         Options Mapper          |     Session Handling      |           Operator Test            |        Integration Test        |
 |------------------|---------------------|----------------------------|:-------------:|:---------------------------------------------------:|:-------------------------------:|:-------------------------:|:----------------------------------:|:------------------------------:|
-| createCollection | `CREATE_COLLECTION` | `CreateCollectionOperator` |      No       |            NoParametersValidator                    |              None               | Ignores (base class logs) | `CreateCollectionOperatorTest` (2) |          YAML `_0001`          |
+| createCollection | `CREATE_COLLECTION` | `CreateCollectionOperator` |      No       |            NoParametersValidator                    |              None               | Ignores (base class logs) | `CreateCollectionOperatorTest` (4) |          YAML `_0001`          |
 | dropCollection   | `DROP_COLLECTION`   | `DropCollectionOperator`   |      No       |            NoParametersValidator                    |              None               | Ignores (base class logs) |  `DropCollectionOperatorTest` (2)  |     YAML `_0004` rollback      |
 | insert           | `INSERT`            | `InsertOperator`           |      Yes      |              Full (documents, options)              |      `InsertOptionsMapper`      |           Full            |      `InsertOperatorTest` (4)      | YAML `_0002`, `_0003`, `_0005` |
 | update           | `UPDATE`            | `UpdateOperator`           |      Yes      |           Full (filter, update, options)            |      `UpdateOptionsMapper`      |           Full            |      `UpdateOperatorTest` (7)      |              None              |
 | delete           | `DELETE`            | `DeleteOperator`           |      Yes      |                Full (filter, multi)                 |              None               |           Full            |      `DeleteOperatorTest` (6)      |     YAML `_0002` rollback      |
 | createIndex      | `CREATE_INDEX`      | `CreateIndexOperator`      |      No       |                Full (keys, options)                 |      `IndexOptionsMapper`       | Ignores (base class logs) |   `CreateIndexOperatorTest` (3)    |     YAML `_0003`, `_0005`      |
-| dropIndex        | `DROP_INDEX`        | `DropIndexOperator`        |      No       |                  indexName or keys                  |              None               | Ignores (base class logs) |    `DropIndexOperatorTest` (3)     |     YAML `_0005` rollback      |
-| renameCollection | `RENAME_COLLECTION` | `RenameCollectionOperator` |      No       |               Full (target, options)                | `RenameCollectionOptionsMapper` | Ignores (base class logs) | `RenameCollectionOperatorTest` (2) |              None              |
+| dropIndex        | `DROP_INDEX`        | `DropIndexOperator`        |      No       |                  indexName or keys                  |              None               | Ignores (base class logs) |    `DropIndexOperatorTest` (7)     |     YAML `_0005` rollback      |
+| renameCollection | `RENAME_COLLECTION` | `RenameCollectionOperator` |      No       |               Full (target, options)                | `RenameCollectionOptionsMapper` | Ignores (base class logs) | `RenameCollectionOperatorTest` (6) |              None              |
 | modifyCollection | `MODIFY_COLLECTION` | `ModifyCollectionOperator` |      No       | Full (validator, validationLevel, validationAction) |              None               | Ignores (base class logs) | `ModifyCollectionOperatorTest` (2) |              None              |
-| createView       | `CREATE_VIEW`       | `CreateViewOperator`       |      No       |          Full (viewOn, pipeline, options)           |    `CreateViewOptionsMapper`    | Ignores (base class logs) |    `CreateViewOperatorTest` (2)    |              None              |
+| createView       | `CREATE_VIEW`       | `CreateViewOperator`       |      No       |          Full (viewOn, pipeline, options)           |    `CreateViewOptionsMapper`    | Ignores (base class logs) |    `CreateViewOperatorTest` (4)    |              None              |
 | dropView         | `DROP_VIEW`         | `DropViewOperator`         |      No       |            NoParametersValidator                    |              None               | Ignores (base class logs) |     `DropViewOperatorTest` (2)     |              None              |
 
 ### Coverage Notes:
@@ -115,12 +115,12 @@ All 10 issues identified in the original analysis have been resolved through mul
 | `UpdateOperatorTest`                |     7      |      Integration (operator-level)      |       Yes       |
 | `DeleteOperatorTest`                |     6      |      Integration (operator-level)      |       Yes       |
 | `CreateIndexOperatorTest`           |     3      |      Integration (operator-level)      |       Yes       |
-| `DropIndexOperatorTest`             |     3      |      Integration (operator-level)      |       Yes       |
-| `CreateCollectionOperatorTest`      |     2      |      Integration (operator-level)      |       Yes       |
+| `DropIndexOperatorTest`             |     7      |      Integration (operator-level)      |       Yes       |
+| `CreateCollectionOperatorTest`      |     4      |      Integration (operator-level)      |       Yes       |
 | `DropCollectionOperatorTest`        |     2      |      Integration (operator-level)      |       Yes       |
-| `RenameCollectionOperatorTest`      |     2      |      Integration (operator-level)      |       Yes       |
+| `RenameCollectionOperatorTest`      |     6      |      Integration (operator-level)      |       Yes       |
 | `ModifyCollectionOperatorTest`      |     2      |      Integration (operator-level)      |       Yes       |
-| `CreateViewOperatorTest`            |     2      |      Integration (operator-level)      |       Yes       |
+| `CreateViewOperatorTest`            |     4      |      Integration (operator-level)      |       Yes       |
 | `DropViewOperatorTest`              |     2      |      Integration (operator-level)      |       Yes       |
 | `MultipleOperationsTest`            |     4      |      Integration (operator-level)      |       Yes       |
 | `IndexOptionsMapperTest`            |     22     |                  Unit                  |       No        |
@@ -130,9 +130,9 @@ All 10 issues identified in the original analysis have been resolved through mul
 | `RenameCollectionOptionsMapperTest` |     4      |                  Unit                  |       No        |
 | `CreateViewOptionsMapperTest`       |     3      |                  Unit                  |       No        |
 | `MongoOperatorExceptionWrappingTest`|     5      |                  Unit                  |       No        |
-| **Total**                           |  **~225**  |                                        |                 |
+| **Total**                           |  **~237**  |                                        |                 |
 
-Unit tests (no Docker): ~180 | Integration tests (Docker required): ~45
+Unit tests (no Docker): ~180 | Integration tests (Docker required): ~57
 
 ### 4.2 Remaining Test Gaps
 
@@ -142,8 +142,8 @@ No dedicated tests exercise operators with a `ClientSession`. The transactional 
 **P1 — Options integration:**
 Mapper unit tests are comprehensive (82 tests), but no operator test verifies behavior with non-default options end-to-end (e.g., `insert` with `bypassDocumentValidation`, `createIndex` with `unique`, `update` with `upsert`). The mapper tests validate conversion correctness; the gap is confirming that converted options produce the expected MongoDB behavior.
 
-**P1 — Idempotency:**
-No test verifies behavior when operations are re-applied (e.g., `createCollection` when collection already exists, `createIndex` when index already exists). This is acknowledged as a framework-level responsibility — the Flamingock audit store prevents re-execution of completed changes.
+**P1 — ~~Idempotency~~** RESOLVED:
+12 idempotency tests now cover all 4 DDL operators that needed handling: `CreateCollectionOperatorTest` (+2), `DropIndexOperatorTest` (+4), `CreateViewOperatorTest` (+2), `RenameCollectionOperatorTest` (+4). Tests verify both the idempotent skip path and the error path for genuine conflicts.
 
 ### 4.2.1 Previously Identified Gaps — Now Resolved
 
@@ -170,7 +170,7 @@ No test verifies behavior when operations are re-applied (e.g., `createCollectio
 | Logging                         |    GOOD     | `MongoOperator` base class logs transactional/non-transactional status for every operation. Clear INFO message when a non-transactional operation receives a session                                                   |
 | Immutability                    |    WEAK     | `MongoOperation` is fully mutable (public setters). No defensive copying of `parameters` map. Acceptable since instances are per-change and not shared                                                                 |
 | Thread safety                   |     N/A     | Template instances are per-execution, not shared. Static logger is safe                                                                                                                                                |
-| Idempotency                     | NOT HANDLED | 4 of 11 operations fail on retry instead of skipping. Critical for multi-step changes with non-transactional DDL. See section 5.2                                                                                      |
+| Idempotency                     |    GOOD     | All 4 DDL operations that failed on retry now check MongoDB state first and skip if the operation already completed. Uses `DatabaseInspector` helper. See section 5.2 (all resolved)                                    |
 | Backwards compatibility         |    GOOD     | `compileOnly` MongoDB driver 4.0.0 is a low bar. Index options correctly throw `UnsupportedOperationException` for removed options (`bucketSize`, `wildcardProjection`, `hidden`)                                      |
 | Resource cleanup                |     N/A     | No resources to clean up. Operators use driver-level collections which are managed by the MongoDB client                                                                                                               |
 
@@ -203,25 +203,25 @@ All 5 gaps identified below have been resolved. Validators now check nested elem
 **Original issue:** When both were present, `DropIndexOperator` used `indexName` and silently discarded `keys`.
 **Resolution:** Added mutual exclusivity check in `DropIndexParametersValidator`. Providing both `indexName` and `keys` now produces `"DropIndex operation requires either 'indexName' or 'keys', not both"`.
 
-### 5.2 Idempotency Gaps
+### 5.2 Idempotency Gaps — ALL RESOLVED
 
-No operator handles pre-existing state. This is critical for **retry scenarios** — if a multi-step change fails mid-way through non-transactional DDL operations, the framework retries from the beginning, and already-completed operations fail instead of being skipped.
+All 4 DDL operations that failed on retry now implement pre-check idempotency via `DatabaseInspector`, a package-private utility class with static methods for inspecting MongoDB state. Each operator checks whether the operation already completed and skips with an INFO log if so. Genuine conflicts (e.g., both source and target exist for rename) are not masked — they still fail.
 
-| Operation          | Re-run scenario            | Current behavior          | Idempotent? | Recommendation                                                                                                                                                                                         |
-|--------------------|----------------------------|---------------------------|:-----------:|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `createCollection` | Collection already exists  | `MongoCommandException`   |     No      | **MUST fix.** Check `listCollectionNames()` first, skip if exists                                                                                                                                      |
-| `dropCollection`   | Collection doesn't exist   | Silent no-op              |     Yes     | No action needed                                                                                                                                                                                       |
-| `createIndex`      | Identical index exists     | Silent no-op              |     Yes     | No action needed. Conflicting index (same field, different options) correctly throws — the user needs to know                                                                                          |
-| `dropIndex`        | Index doesn't exist        | `MongoCommandException`   |     No      | **SHOULD fix.** Check if index exists first, skip if not                                                                                                                                               |
-| `createView`       | View already exists        | `MongoCommandException`   |     No      | **SHOULD fix.** Skip if exists. The Flamingock audit store prevents re-execution of completed changes, so the retry scenario is the main concern — in that case the pipeline definition hasn't changed |
-| `dropView`         | View doesn't exist         | Silent no-op              |     Yes     | No action needed                                                                                                                                                                                       |
-| `renameCollection` | Source gone, target exists | `MongoCommandException`   |     No      | **SHOULD fix.** If source doesn't exist AND target exists, the rename likely already succeeded — skip. Fail otherwise                                                                                  |
-| `insert`           | Duplicate `_id`            | `MongoBulkWriteException` |     No      | Leave as-is. Partial inserts make idempotency complex. User is responsible for designing idempotent inserts via rollback pairs                                                                         |
-| `update`           | No docs match filter       | 0 modified, no error      |     Yes     | No action needed                                                                                                                                                                                       |
-| `delete`           | No docs match filter       | 0 deleted, no error       |     Yes     | No action needed                                                                                                                                                                                       |
-| `modifyCollection` | Collection doesn't exist   | `MongoCommandException`   |     No      | Leave as-is. Modifying a non-existent collection is a genuine error                                                                                                                                    |
+| Operation          | Re-run scenario            | Current behavior                   | Idempotent? | Resolution                                                                                                                                                                                    |
+|--------------------|----------------------------|------------------------------------|:-----------:|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `createCollection` | Collection already exists  | Skips with INFO log                |   **Yes**   | **RESOLVED.** `DatabaseInspector.collectionExists()` check before `createCollection()`                                                                                                       |
+| `dropCollection`   | Collection doesn't exist   | Silent no-op                       |     Yes     | No action needed                                                                                                                                                                              |
+| `createIndex`      | Identical index exists     | Silent no-op                       |     Yes     | No action needed. Conflicting index (same field, different options) correctly throws — the user needs to know                                                                                 |
+| `dropIndex`        | Index doesn't exist        | Skips with INFO log                |   **Yes**   | **RESOLVED.** `DatabaseInspector.indexExistsByName()` / `indexExistsByKeys()` check before `dropIndex()`                                                                                     |
+| `createView`       | View already exists        | Skips with INFO log                |   **Yes**   | **RESOLVED.** `DatabaseInspector.collectionExists()` check (views appear in `listCollectionNames()`)                                                                                         |
+| `dropView`         | View doesn't exist         | Silent no-op                       |     Yes     | No action needed                                                                                                                                                                              |
+| `renameCollection` | Source gone, target exists | Skips with INFO log                |   **Yes**   | **RESOLVED.** Checks both source and target existence. `!sourceExists && targetExists` → skip (already renamed). All other error cases proceed normally and MongoDB handles the error         |
+| `insert`           | Duplicate `_id`            | `MongoBulkWriteException`          |     No      | Leave as-is. Partial inserts make idempotency complex. User is responsible for designing idempotent inserts via rollback pairs                                                                |
+| `update`           | No docs match filter       | 0 modified, no error               |     Yes     | No action needed                                                                                                                                                                              |
+| `delete`           | No docs match filter       | 0 deleted, no error                |     Yes     | No action needed                                                                                                                                                                              |
+| `modifyCollection` | Collection doesn't exist   | `MongoCommandException`            |     No      | Leave as-is. Modifying a non-existent collection is a genuine error                                                                                                                           |
 
-**Summary:** 4 operations need idempotency handling (`createCollection` is the most critical), 5 are already idempotent, 2 should remain non-idempotent (the failure is meaningful).
+**Summary:** 9 of 11 operations are now idempotent. The remaining 2 (`insert`, `modifyCollection`) intentionally remain non-idempotent — their failure on retry is meaningful and should not be suppressed.
 
 ### 5.3 Silent Validation Gaps — ALL RESOLVED
 
@@ -336,25 +336,25 @@ Only `validator`, `validationLevel`, and `validationAction` are supported. Missi
 | Category                       |  Weight  | Score (1-10) |   Weighted   |
 |--------------------------------|:--------:|:------------:|:------------:|
 | Architecture & Design          |   15%    |      9       |     1.35     |
-| Implementation Correctness     |   15%    |      8       |     1.20     |
+| Implementation Correctness     |   15%    |      9       |     1.35     |
 | Validation & Error Handling    |   20%    |      8       |     1.60     |
 | Template Feature Completeness  |   15%    |      6       |     0.90     |
-| Test Coverage                  |   20%    |      6       |     1.20     |
+| Test Coverage                  |   20%    |      7       |     1.40     |
 | Security & Safety              |   10%    |      8       |     0.80     |
 | Code Quality & Maintainability |    5%    |      8       |     0.40     |
-| **Total**                      | **100%** |              | **7.45 / 10** |
+| **Total**                      | **100%** |              | **7.80 / 10** |
 
 ### Score Justification
 
 **Architecture (9/10):** Solid layered design with clean separation of concerns. The validation architecture was significantly improved by leveraging the framework's `TemplatePayload` contract — load-time validation is now built into the data model rather than being a separate step. Enum factory with validator binding is elegant. Template method pattern in operators is well-designed.
 
-**Implementation Correctness (8/10):** All 10 original correctness issues have been resolved. Rollback validation is now handled by the framework. All operators have correct transactional flags. Collation mapping works for YAML input. Delete supports `deleteOne`/`deleteMany`. MongoDB driver exceptions are now wrapped with template-level context (`MongoTemplateExecutionException`) for easier debugging of multi-step changes. However, **4 of 11 operations are not idempotent** and will fail on retry in multi-step changes (section 5.2). `createCollection` is the most critical — it throws `MongoCommandException` if the collection already exists.
+**Implementation Correctness (9/10):** All 10 original correctness issues have been resolved. Rollback validation is now handled by the framework. All operators have correct transactional flags. Collation mapping works for YAML input. Delete supports `deleteOne`/`deleteMany`. MongoDB driver exceptions are now wrapped with template-level context (`MongoTemplateExecutionException`) for easier debugging of multi-step changes. All 4 DDL operations that previously failed on retry (`createCollection`, `dropIndex`, `createView`, `renameCollection`) now implement idempotent pre-checks via `DatabaseInspector` — 9 of 11 operations are now retry-safe (section 5.2). The remaining deduction is for `insert` not being idempotent (by design) and edge cases in option value type checking at the mapper level.
 
 **Validation (8/10):** Comprehensive load-time validation architecture with 8 dedicated parameter validators + `NoParametersValidator` + `CollectionValidator`. Top-level types are checked, unrecognized parameter keys are rejected, nested element types are validated (insert documents, createView pipeline stages checked as Maps; update `multi` checked as Boolean), and multiple errors are collected. All 5 validation-to-execution gaps (section 5.1) and all 3 silent validation gaps (section 5.3) have been resolved. `NoParametersValidator` now catches unexpected parameters on `createCollection`/`dropCollection`/`dropView`. Unrecognized option keys inside `options` are detected via `checkUnrecognizedOptionKeys` with `RECOGNIZED_KEYS` sets in all 5 mappers. The remaining deduction is for edge cases in option value validation (e.g., `unique: "yes"` instead of `true` is not caught at load time — only at mapper invocation).
 
 **Template Feature Completeness (6/10):** The template covers 11 MongoDB operations, which handles the most common change scenarios. However, feature gaps reduce the "no-code" value proposition: `delete` lacks `options` support (inconsistent with insert/update), `createCollection` accepts zero parameters (no capped/timeseries collections), `replaceOne` is missing entirely (semantically different from `update`), `modifyCollection` only exposes 3 of many `collMod` options, and `dropView` has no safety check against accidentally dropping real collections. See section 8 for details.
 
-**Test Coverage (6/10):** Dramatically expanded from the original analysis. 94 validation tests cover all 11 operations with type checks, missing parameters, unrecognized parameter keys, unrecognized option keys, no-parameter enforcement, nested element type checks, and error accumulation. 82 mapper unit tests cover all option conversions including collation. 5 exception wrapping tests verify `MongoTemplateExecutionException` behavior. Operator tests expanded (UpdateOperatorTest: 7, DeleteOperatorTest: 6). However: zero transactional path tests, zero options-with-operator integration tests, and zero idempotency tests. ~225 total tests.
+**Test Coverage (7/10):** Dramatically expanded from the original analysis. 94 validation tests cover all 11 operations with type checks, missing parameters, unrecognized parameter keys, unrecognized option keys, no-parameter enforcement, nested element type checks, and error accumulation. 82 mapper unit tests cover all option conversions including collation. 5 exception wrapping tests verify `MongoTemplateExecutionException` behavior. Operator tests expanded (UpdateOperatorTest: 7, DeleteOperatorTest: 6). 12 new idempotency tests cover all 4 DDL operators: CreateCollectionOperatorTest (+2), DropIndexOperatorTest (+4), CreateViewOperatorTest (+2), RenameCollectionOperatorTest (+4). However: zero transactional path tests, zero options-with-operator integration tests. ~237 total tests.
 
 **Security (8/10):** Developer-authored context makes injection-style concerns not applicable. Collection name `$`/`\0` checks serve as guardrails, now applied to both `collection` and `target` parameters. `modifyCollection` parameters are validated against known values. YAML deserialization is delegated to the framework.
 
@@ -362,7 +362,7 @@ Only `validator`, `validationLevel`, and `validationAction` are supported. Missi
 
 ### Bottom Line
 
-The module has a **solid architecture and clean codebase**, with comprehensive validation and error handling. All 10 original correctness issues, all 5 validation-to-execution gaps, and all 3 silent validation gaps have been resolved. MongoDB driver exceptions are now wrapped with template-level context for easier debugging. Two areas remain for future improvement: (1) **Idempotency** — 4 DDL operations fail on retry instead of skipping, making multi-step changes fragile (section 5.2); (2) **Feature gaps** — missing `replaceOne`, inconsistent options support, bare-bones `createCollection` (section 8). The module is **functional for simple and moderately complex changes** but needs idempotency hardening for robust multi-step scenarios.
+The module has a **solid architecture and clean codebase**, with comprehensive validation, error handling, and retry safety. All 10 original correctness issues, all 5 validation-to-execution gaps, all 3 silent validation gaps, and all 4 idempotency gaps have been resolved. MongoDB driver exceptions are now wrapped with template-level context for easier debugging. 9 of 11 operations are now idempotent — multi-step changes with non-transactional DDL operations are retry-safe. The remaining area for improvement is **feature gaps** — missing `replaceOne`, inconsistent options support, bare-bones `createCollection` (section 8). The module is **production-ready for simple and moderately complex changes** with robust multi-step retry behavior.
 
 ---
 
