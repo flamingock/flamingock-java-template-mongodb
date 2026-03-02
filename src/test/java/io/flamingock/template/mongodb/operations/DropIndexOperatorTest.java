@@ -83,6 +83,91 @@ class DropIndexOperatorTest extends AbstractMongoOperatorTest {
         assertFalse(indexExistsByKeys("name"), "Index should have been dropped");
     }
 
+    @Test
+    @DisplayName("WHEN dropIndex by name is applied twice THEN second call succeeds silently")
+    void dropIndexByNameIdempotentTest() {
+        mongoDatabase.createCollection(COLLECTION_NAME);
+        mongoDatabase.getCollection(COLLECTION_NAME).createIndex(new Document("email", 1),
+                new com.mongodb.client.model.IndexOptions().name(INDEX_NAME));
+        assertTrue(indexExists(INDEX_NAME), "Index should exist before drop");
+
+        MongoOperation operation = new MongoOperation();
+        operation.setType("dropIndex");
+        operation.setCollection(COLLECTION_NAME);
+        Map<String, Object> params = new HashMap<>();
+        params.put("indexName", INDEX_NAME);
+        operation.setParameters(params);
+
+        DropIndexOperator operator = new DropIndexOperator(mongoDatabase, operation);
+        operator.apply(null);
+        assertFalse(indexExists(INDEX_NAME), "Index should have been dropped");
+
+        // Second apply should not throw
+        operator.apply(null);
+        assertFalse(indexExists(INDEX_NAME), "Index should still not exist after second drop");
+    }
+
+    @Test
+    @DisplayName("WHEN dropIndex by keys is applied twice THEN second call succeeds silently")
+    void dropIndexByKeysIdempotentTest() {
+        mongoDatabase.createCollection(COLLECTION_NAME);
+        mongoDatabase.getCollection(COLLECTION_NAME).createIndex(new Document("name", 1));
+        assertTrue(indexExistsByKeys("name"), "Index should exist before drop");
+
+        MongoOperation operation = new MongoOperation();
+        operation.setType("dropIndex");
+        operation.setCollection(COLLECTION_NAME);
+        Map<String, Object> params = new HashMap<>();
+        Map<String, Object> keys = new HashMap<>();
+        keys.put("name", 1);
+        params.put("keys", keys);
+        operation.setParameters(params);
+
+        DropIndexOperator operator = new DropIndexOperator(mongoDatabase, operation);
+        operator.apply(null);
+        assertFalse(indexExistsByKeys("name"), "Index should have been dropped");
+
+        // Second apply should not throw
+        operator.apply(null);
+        assertFalse(indexExistsByKeys("name"), "Index should still not exist after second drop");
+    }
+
+    @Test
+    @DisplayName("WHEN dropIndex by name targets non-existent index THEN operation is skipped without error")
+    void dropIndexByNameNonExistentTest() {
+        mongoDatabase.createCollection(COLLECTION_NAME);
+
+        MongoOperation operation = new MongoOperation();
+        operation.setType("dropIndex");
+        operation.setCollection(COLLECTION_NAME);
+        Map<String, Object> params = new HashMap<>();
+        params.put("indexName", "nonExistentIndex");
+        operation.setParameters(params);
+
+        DropIndexOperator operator = new DropIndexOperator(mongoDatabase, operation);
+        operator.apply(null);
+        // Should complete without throwing
+    }
+
+    @Test
+    @DisplayName("WHEN dropIndex by keys targets non-existent index THEN operation is skipped without error")
+    void dropIndexByKeysNonExistentTest() {
+        mongoDatabase.createCollection(COLLECTION_NAME);
+
+        MongoOperation operation = new MongoOperation();
+        operation.setType("dropIndex");
+        operation.setCollection(COLLECTION_NAME);
+        Map<String, Object> params = new HashMap<>();
+        Map<String, Object> keys = new HashMap<>();
+        keys.put("nonExistentField", 1);
+        params.put("keys", keys);
+        operation.setParameters(params);
+
+        DropIndexOperator operator = new DropIndexOperator(mongoDatabase, operation);
+        operator.apply(null);
+        // Should complete without throwing
+    }
+
     private boolean indexExists(String indexName) {
         List<Document> indexes = mongoDatabase.getCollection(COLLECTION_NAME)
                 .listIndexes()

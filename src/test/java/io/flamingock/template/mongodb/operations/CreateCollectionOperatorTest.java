@@ -52,6 +52,41 @@ class CreateCollectionOperatorTest extends AbstractMongoOperatorTest {
         assertTrue(collectionExists(COLLECTION_NAME), "Collection should exist after creation");
     }
 
+    @Test
+    @DisplayName("WHEN createCollection operator is applied twice THEN second call succeeds silently")
+    void createCollectionIdempotentTest() {
+        assertFalse(collectionExists(COLLECTION_NAME), "Collection should not exist before creation");
+
+        MongoOperation operation = new MongoOperation();
+        operation.setType("createCollection");
+        operation.setCollection(COLLECTION_NAME);
+        operation.setParameters(new HashMap<>());
+
+        CreateCollectionOperator operator = new CreateCollectionOperator(mongoDatabase, operation);
+        operator.apply(null);
+        assertTrue(collectionExists(COLLECTION_NAME), "Collection should exist after first creation");
+
+        // Second apply should not throw
+        operator.apply(null);
+        assertTrue(collectionExists(COLLECTION_NAME), "Collection should still exist after second creation");
+    }
+
+    @Test
+    @DisplayName("WHEN createCollection operator is applied and collection already exists THEN operation is skipped")
+    void createCollectionAlreadyExistsTest() {
+        mongoDatabase.createCollection(COLLECTION_NAME);
+        assertTrue(collectionExists(COLLECTION_NAME), "Collection should exist before operator runs");
+
+        MongoOperation operation = new MongoOperation();
+        operation.setType("createCollection");
+        operation.setCollection(COLLECTION_NAME);
+        operation.setParameters(new HashMap<>());
+
+        CreateCollectionOperator operator = new CreateCollectionOperator(mongoDatabase, operation);
+        operator.apply(null);
+        assertTrue(collectionExists(COLLECTION_NAME), "Collection should still exist after skipped creation");
+    }
+
     private boolean collectionExists(String collectionName) {
         return mongoDatabase.listCollectionNames()
                 .into(new ArrayList<>())
