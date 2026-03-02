@@ -53,6 +53,23 @@ class DropCollectionOperatorTest extends AbstractMongoOperatorTest {
         assertFalse(collectionExists(COLLECTION_NAME), "Collection should have been dropped");
     }
 
+    @Test
+    @DisplayName("WHEN dropCollection is applied on non-existent collection THEN no exception is thrown")
+    void dropNonExistentCollectionSucceedsSilentlyTest() {
+        assertFalse(collectionExists(COLLECTION_NAME), "Collection should not exist before drop");
+
+        MongoOperation operation = new MongoOperation();
+        operation.setType("dropCollection");
+        operation.setCollection(COLLECTION_NAME);
+        operation.setParameters(new HashMap<>());
+
+        DropCollectionOperator operator = new DropCollectionOperator(mongoDatabase, operation);
+        // MongoDB drop() is natively idempotent — no exception on non-existent collection
+        operator.apply(null);
+
+        assertFalse(collectionExists(COLLECTION_NAME), "Collection should still not exist");
+    }
+
     private boolean collectionExists(String collectionName) {
         return mongoDatabase.listCollectionNames()
                 .into(new ArrayList<>())

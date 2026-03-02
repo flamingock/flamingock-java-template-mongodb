@@ -27,6 +27,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.flamingock.template.mongodb.MongoTemplateExecutionException;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CreateIndexOperatorTest extends AbstractMongoOperatorTest {
@@ -103,6 +107,78 @@ class CreateIndexOperatorTest extends AbstractMongoOperatorTest {
             Document key = idx.get("key", Document.class);
             return key != null && key.containsKey(keyField);
         });
+    }
+
+    @Test
+    @DisplayName("WHEN identical index is created twice THEN no exception is thrown (idempotent)")
+    void createIdenticalIndexIdempotentTest() {
+        mongoDatabase.createCollection(COLLECTION_NAME);
+
+        MongoOperation operation = new MongoOperation();
+        operation.setType("createIndex");
+        operation.setCollection(COLLECTION_NAME);
+
+        Map<String, Object> params = new HashMap<>();
+        Map<String, Object> keys = new HashMap<>();
+        keys.put("email", 1);
+        params.put("keys", keys);
+
+        Map<String, Object> options = new HashMap<>();
+        options.put("unique", true);
+        options.put("name", INDEX_NAME);
+        params.put("options", options);
+        operation.setParameters(params);
+
+        // First creation
+        new CreateIndexOperator(mongoDatabase, operation).apply(null);
+        assertTrue(indexExists(INDEX_NAME), "Index should exist after first creation");
+
+        // Second identical creation — should be idempotent
+        assertDoesNotThrow(() -> new CreateIndexOperator(mongoDatabase, operation).apply(null),
+                "Creating identical index should not throw");
+        assertTrue(indexExists(INDEX_NAME), "Index should still exist after second creation");
+    }
+
+    @Test
+    @DisplayName("WHEN index with same name but different keys is created THEN MongoTemplateExecutionException is thrown")
+    void createConflictingIndexThrowsTest() {
+        mongoDatabase.createCollection(COLLECTION_NAME);
+
+        // First: create index on email with a specific name
+        MongoOperation operation1 = new MongoOperation();
+        operation1.setType("createIndex");
+        operation1.setCollection(COLLECTION_NAME);
+
+        Map<String, Object> params1 = new HashMap<>();
+        Map<String, Object> keys1 = new HashMap<>();
+        keys1.put("email", 1);
+        params1.put("keys", keys1);
+
+        Map<String, Object> options1 = new HashMap<>();
+        options1.put("name", "my_index");
+        params1.put("options", options1);
+        operation1.setParameters(params1);
+
+        new CreateIndexOperator(mongoDatabase, operation1).apply(null);
+
+        // Second: create index on a DIFFERENT key but with the SAME name — guaranteed conflict
+        MongoOperation operation2 = new MongoOperation();
+        operation2.setType("createIndex");
+        operation2.setCollection(COLLECTION_NAME);
+
+        Map<String, Object> params2 = new HashMap<>();
+        Map<String, Object> keys2 = new HashMap<>();
+        keys2.put("name", 1);
+        params2.put("keys", keys2);
+
+        Map<String, Object> options2 = new HashMap<>();
+        options2.put("name", "my_index");
+        params2.put("options", options2);
+        operation2.setParameters(params2);
+
+        assertThrows(MongoTemplateExecutionException.class,
+                () -> new CreateIndexOperator(mongoDatabase, operation2).apply(null),
+                "Creating index with same name but different keys should throw");
     }
 
     private boolean isIndexUnique(String indexName) {

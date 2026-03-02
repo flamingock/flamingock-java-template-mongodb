@@ -45,6 +45,7 @@ import java.util.Map;
 import static io.flamingock.internal.util.constants.CommunityPersistenceConstants.DEFAULT_AUDIT_STORE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @EnableFlamingock(configFile = "flamingock/pipeline.yaml")
@@ -290,5 +291,41 @@ class MongoChangeTemplateTest {
 
         assertFalse(collectionExists("stepRollbackTest"),
                 "Collection should not exist after framework-triggered rollback");
+    }
+
+    @Test
+    @DisplayName("WHEN apply is invoked with transactional=true and null session THEN IllegalArgumentException is thrown")
+    void applyWithTransactionalChangeAndNullSessionThrowsTest() {
+        MongoChangeTemplate template = new MongoChangeTemplate();
+        template.setChangeId("txn-apply-test");
+        template.setTransactional(true);
+
+        MongoOperation createCollectionOp = new MongoOperation();
+        createCollectionOp.setType("createCollection");
+        createCollectionOp.setCollection("stepRollbackTest");
+        template.setApplyPayload(createCollectionOp);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> template.apply(mongoDatabase, null));
+        assertTrue(ex.getMessage().contains("txn-apply-test"),
+                "Exception message should contain the changeId");
+    }
+
+    @Test
+    @DisplayName("WHEN rollback is invoked with transactional=true and null session THEN IllegalArgumentException is thrown")
+    void rollbackWithTransactionalChangeAndNullSessionThrowsTest() {
+        MongoChangeTemplate template = new MongoChangeTemplate();
+        template.setChangeId("txn-rollback-test");
+        template.setTransactional(true);
+
+        MongoOperation dropCollectionOp = new MongoOperation();
+        dropCollectionOp.setType("dropCollection");
+        dropCollectionOp.setCollection("stepRollbackTest");
+        template.setRollbackPayload(dropCollectionOp);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> template.rollback(mongoDatabase, null));
+        assertTrue(ex.getMessage().contains("txn-rollback-test"),
+                "Exception message should contain the changeId");
     }
 }
