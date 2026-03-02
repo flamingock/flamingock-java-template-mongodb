@@ -15,6 +15,7 @@
  */
 package io.flamingock.template.mongodb.operations;
 
+import io.flamingock.template.mongodb.MongoTemplateExecutionException;
 import io.flamingock.template.mongodb.model.MongoOperation;
 import io.flamingock.template.mongodb.model.operator.InsertOperator;
 import org.bson.Document;
@@ -130,8 +131,11 @@ class InsertOperatorTest extends AbstractMongoOperatorTest {
 
         InsertOperator operator = new InsertOperator(mongoDatabase, operation);
         // Empty documents should be caught by InsertParametersValidator at load time.
-        // If the operator is called directly with empty documents, the MongoDB driver throws.
-        Assertions.assertThrows(IllegalArgumentException.class, () -> operator.apply(null));
+        // If the operator is called directly with empty documents, the MongoDB driver throws
+        // IllegalArgumentException, which is wrapped by MongoOperator.apply().
+        MongoTemplateExecutionException ex = Assertions.assertThrows(
+                MongoTemplateExecutionException.class, () -> operator.apply(null));
+        Assertions.assertTrue(ex.getCause() instanceof IllegalArgumentException);
     }
 
     private long getDocumentCount() {

@@ -1087,6 +1087,95 @@ class MongoOperationValidateTest {
             assertTrue(errors.isEmpty());
         }
 
+        @Test
+        @DisplayName("WHEN createCollection has parameters THEN validation fails")
+        void createCollectionWithParametersTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("capped", true);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not accept parameters"));
+        }
+
+        @Test
+        @DisplayName("WHEN createCollection has empty parameters THEN validation passes")
+        void createCollectionEmptyParametersTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createCollection");
+            op.setCollection("test");
+            op.setParameters(new HashMap<>());
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertTrue(errors.isEmpty());
+        }
+
+        @Test
+        @DisplayName("WHEN dropCollection has parameters THEN validation fails")
+        void dropCollectionWithParametersTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("dropCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("writeConcern", "majority");
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not accept parameters"));
+        }
+
+        @Test
+        @DisplayName("WHEN dropCollection has empty parameters THEN validation passes")
+        void dropCollectionEmptyParametersTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("dropCollection");
+            op.setCollection("test");
+            op.setParameters(new HashMap<>());
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertTrue(errors.isEmpty());
+        }
+
+        @Test
+        @DisplayName("WHEN dropView has parameters THEN validation fails")
+        void dropViewWithParametersTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("dropView");
+            op.setCollection("testView");
+            Map<String, Object> params = new HashMap<>();
+            params.put("force", true);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not accept parameters"));
+        }
+
+        @Test
+        @DisplayName("WHEN dropView has empty parameters THEN validation passes")
+        void dropViewEmptyParametersTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("dropView");
+            op.setCollection("testView");
+            op.setParameters(new HashMap<>());
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertTrue(errors.isEmpty());
+        }
     }
 
     @Nested
@@ -1437,6 +1526,165 @@ class MongoOperationValidateTest {
             assertEquals(1, errors.size());
             assertEquals("parameters.unknownKey", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("does not recognize parameter 'unknownKey'"));
+        }
+    }
+
+    @Nested
+    @DisplayName("Unrecognized Option Keys Tests")
+    class UnrecognizedOptionKeysTests {
+
+        @Test
+        @DisplayName("WHEN insert has unrecognized option key THEN validation fails")
+        void insertUnrecognizedOptionKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("insert");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            List<Map<String, Object>> docs = new ArrayList<>();
+            Map<String, Object> doc = new HashMap<>();
+            doc.put("name", "Test");
+            docs.add(doc);
+            params.put("documents", docs);
+            Map<String, Object> options = new HashMap<>();
+            options.put("banana", true);
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options.banana", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize option 'banana'"));
+        }
+
+        @Test
+        @DisplayName("WHEN update has unrecognized option key THEN validation fails")
+        void updateUnrecognizedOptionKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("update");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("filter", new HashMap<>());
+            Map<String, Object> update = new HashMap<>();
+            update.put("$set", new HashMap<>());
+            params.put("update", update);
+            Map<String, Object> options = new HashMap<>();
+            options.put("unknownOption", "value");
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options.unknownOption", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize option 'unknownOption'"));
+        }
+
+        @Test
+        @DisplayName("WHEN createIndex has unrecognized option key THEN validation fails")
+        void createIndexUnrecognizedOptionKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createIndex");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            Map<String, Object> keys = new HashMap<>();
+            keys.put("email", 1);
+            params.put("keys", keys);
+            Map<String, Object> options = new HashMap<>();
+            options.put("invalidOption", true);
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options.invalidOption", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize option 'invalidOption'"));
+        }
+
+        @Test
+        @DisplayName("WHEN createView has unrecognized option key THEN validation fails")
+        void createViewUnrecognizedOptionKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createView");
+            op.setCollection("testView");
+            Map<String, Object> params = new HashMap<>();
+            params.put("viewOn", "sourceCollection");
+            params.put("pipeline", Collections.singletonList(new HashMap<>()));
+            Map<String, Object> options = new HashMap<>();
+            options.put("unknownViewOption", "value");
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options.unknownViewOption", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize option 'unknownViewOption'"));
+        }
+
+        @Test
+        @DisplayName("WHEN renameCollection has unrecognized option key THEN validation fails")
+        void renameCollectionUnrecognizedOptionKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("renameCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("target", "newName");
+            Map<String, Object> options = new HashMap<>();
+            options.put("badOption", true);
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options.badOption", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("does not recognize option 'badOption'"));
+        }
+
+        @Test
+        @DisplayName("WHEN createIndex has recognized option keys THEN validation passes")
+        void createIndexRecognizedOptionKeyTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createIndex");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            Map<String, Object> keys = new HashMap<>();
+            keys.put("email", 1);
+            params.put("keys", keys);
+            Map<String, Object> options = new HashMap<>();
+            options.put("unique", true);
+            options.put("name", "idx");
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertTrue(errors.isEmpty());
+        }
+
+        @Test
+        @DisplayName("WHEN insert has multiple unrecognized option keys THEN all errors reported")
+        void insertMultipleUnrecognizedOptionKeysTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("insert");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            List<Map<String, Object>> docs = new ArrayList<>();
+            Map<String, Object> doc = new HashMap<>();
+            doc.put("name", "Test");
+            docs.add(doc);
+            params.put("documents", docs);
+            Map<String, Object> options = new HashMap<>();
+            options.put("foo", true);
+            options.put("bar", false);
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate();
+
+            assertEquals(2, errors.size());
         }
     }
 }
