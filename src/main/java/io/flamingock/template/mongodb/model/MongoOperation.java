@@ -25,8 +25,6 @@ import io.flamingock.template.mongodb.model.operator.MongoOperator;
 import io.flamingock.template.mongodb.validation.CollectionValidator;
 import io.flamingock.template.mongodb.validation.TypeValidator;
 import org.bson.Document;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,8 +32,6 @@ import java.util.Map;
 
 @NonLockGuarded(NonLockGuardedType.NONE)
 public class MongoOperation implements TemplatePayload {
-
-    private static final Logger logger = LoggerFactory.getLogger(MongoOperation.class);
 
     private String type;
     private String collection;
@@ -112,11 +108,6 @@ public class MongoOperation implements TemplatePayload {
                     "Operation type '" + type + "' does not support transactions. "
                             + "Transactional changes require all operations to be transactional "
                             + "(insert, update, delete)."));
-        }
-        if (operationType.isTransactional() && !context.isTransactional()) {
-            logger.warn("Operation '{}' on collection '{}' supports transactions but the change "
-                    + "is not marked as transactional. Consider setting transactional: true "
-                    + "for native rollback on failure.", type, collection);
         }
 
         return errors;
