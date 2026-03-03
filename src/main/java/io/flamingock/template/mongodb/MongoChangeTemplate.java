@@ -23,6 +23,7 @@ import io.flamingock.api.annotations.Nullable;
 import io.flamingock.api.annotations.Rollback;
 import io.flamingock.api.template.AbstractChangeTemplate;
 import io.flamingock.api.template.wrappers.TemplateVoid;
+import io.flamingock.api.template.TemplateValidationContext;
 import io.flamingock.template.mongodb.model.MongoOperation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,7 +87,7 @@ public class MongoChangeTemplate extends AbstractChangeTemplate<TemplateVoid, Mo
      * Executes the apply operation for the current step.
      * <p>
      * Precondition: {@code applyPayload} has been structurally validated at load time
-     * via {@link MongoOperation#validate()}, which delegates to the appropriate
+     * via {@link MongoOperation#validate(TemplateValidationContext)}, which delegates to the appropriate
      * {@code ParametersValidator} for each operation type. No validation is performed here.
      */
     @Apply
@@ -99,7 +100,7 @@ public class MongoChangeTemplate extends AbstractChangeTemplate<TemplateVoid, Mo
      * Executes the rollback operation for the current step.
      * <p>
      * Precondition: {@code rollbackPayload} has been structurally validated at load time
-     * via {@link MongoOperation#validate()}, which delegates to the appropriate
+     * via {@link MongoOperation#validate(TemplateValidationContext)}, which delegates to the appropriate
      * {@code ParametersValidator} for each operation type. No validation is performed here.
      */
     @Rollback

@@ -16,9 +16,12 @@
 package io.flamingock.template.mongodb.model;
 
 import io.flamingock.api.template.TemplatePayloadValidationError;
+import io.flamingock.api.template.TemplateValidationContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.*;
 
@@ -26,6 +29,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MongoOperationValidateTest {
+
+    private static final TemplateValidationContext NON_TRANSACTIONAL_CONTEXT = new TemplateValidationContext();
+
+    private static TemplateValidationContext transactionalContext() {
+        TemplateValidationContext ctx = new TemplateValidationContext();
+        ctx.setTransactional(true);
+        return ctx;
+    }
 
     @Nested
     @DisplayName("Common Validation Tests")
@@ -38,7 +49,7 @@ class MongoOperationValidateTest {
             op.setType(null);
             op.setCollection("test");
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("type", errors.get(0).getField());
@@ -52,7 +63,7 @@ class MongoOperationValidateTest {
             op.setType("");
             op.setCollection("test");
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("type", errors.get(0).getField());
@@ -66,7 +77,7 @@ class MongoOperationValidateTest {
             op.setType("unknownType");
             op.setCollection("test");
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("type", errors.get(0).getField());
@@ -80,7 +91,7 @@ class MongoOperationValidateTest {
             op.setType("createCollection");
             op.setCollection(null);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("collection", errors.get(0).getField());
@@ -94,7 +105,7 @@ class MongoOperationValidateTest {
             op.setType("createCollection");
             op.setCollection("");
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("collection", errors.get(0).getField());
@@ -108,7 +119,7 @@ class MongoOperationValidateTest {
             op.setType("createCollection");
             op.setCollection("test$collection");
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("collection", errors.get(0).getField());
@@ -122,7 +133,7 @@ class MongoOperationValidateTest {
             op.setType("createCollection");
             op.setCollection("test\0collection");
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("collection", errors.get(0).getField());
@@ -142,7 +153,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(null);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters", errors.get(0).getField());
@@ -157,7 +168,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.documents", errors.get(0).getField());
@@ -174,7 +185,7 @@ class MongoOperationValidateTest {
             params.put("documents", new ArrayList<>());
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.documents", errors.get(0).getField());
@@ -193,7 +204,7 @@ class MongoOperationValidateTest {
             params.put("documents", docs);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertTrue(errors.get(0).getField().contains("parameters.documents"));
@@ -210,7 +221,7 @@ class MongoOperationValidateTest {
             params.put("documents", Arrays.asList("hello"));
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.documents[0]", errors.get(0).getField());
@@ -229,7 +240,7 @@ class MongoOperationValidateTest {
             params.put("documents", Arrays.asList(validDoc, 123));
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.documents[1]", errors.get(0).getField());
@@ -246,7 +257,7 @@ class MongoOperationValidateTest {
             params.put("documents", "not a list");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.documents", errors.get(0).getField());
@@ -268,7 +279,7 @@ class MongoOperationValidateTest {
             params.put("options", "not a document");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.options", errors.get(0).getField());
@@ -289,7 +300,7 @@ class MongoOperationValidateTest {
             params.put("documents", docs);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -307,7 +318,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(null);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters", errors.get(0).getField());
@@ -326,7 +337,7 @@ class MongoOperationValidateTest {
             params.put("update", update);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.filter", errors.get(0).getField());
@@ -343,7 +354,7 @@ class MongoOperationValidateTest {
             params.put("filter", new HashMap<>());
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.update", errors.get(0).getField());
@@ -361,7 +372,7 @@ class MongoOperationValidateTest {
             params.put("update", "not a document");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.update", errors.get(0).getField());
@@ -381,7 +392,7 @@ class MongoOperationValidateTest {
             params.put("update", update);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.filter", errors.get(0).getField());
@@ -402,7 +413,7 @@ class MongoOperationValidateTest {
             params.put("options", "not a document");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.options", errors.get(0).getField());
@@ -423,7 +434,7 @@ class MongoOperationValidateTest {
             params.put("multi", "yes");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.multi", errors.get(0).getField());
@@ -438,7 +449,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(2, errors.size());
         }
@@ -458,7 +469,7 @@ class MongoOperationValidateTest {
             params.put("update", update);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -476,7 +487,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.filter", errors.get(0).getField());
@@ -493,7 +504,7 @@ class MongoOperationValidateTest {
             params.put("filter", "not a document");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.filter", errors.get(0).getField());
@@ -510,7 +521,7 @@ class MongoOperationValidateTest {
             params.put("filter", new HashMap<>());
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -528,7 +539,7 @@ class MongoOperationValidateTest {
             params.put("multi", "true");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.multi", errors.get(0).getField());
@@ -547,7 +558,7 @@ class MongoOperationValidateTest {
             params.put("filter", filter);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -565,7 +576,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(null);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters", errors.get(0).getField());
@@ -580,7 +591,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.keys", errors.get(0).getField());
@@ -597,7 +608,7 @@ class MongoOperationValidateTest {
             params.put("keys", new HashMap<>());
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.keys", errors.get(0).getField());
@@ -614,7 +625,7 @@ class MongoOperationValidateTest {
             params.put("keys", "not a map");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.keys", errors.get(0).getField());
@@ -634,7 +645,7 @@ class MongoOperationValidateTest {
             params.put("options", "not a document");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.options", errors.get(0).getField());
@@ -653,7 +664,7 @@ class MongoOperationValidateTest {
             params.put("keys", keys);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -671,7 +682,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertTrue(errors.get(0).getMessage().contains("'indexName' or 'keys'"));
@@ -687,7 +698,7 @@ class MongoOperationValidateTest {
             params.put("keys", "not a map");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.keys", errors.get(0).getField());
@@ -704,7 +715,7 @@ class MongoOperationValidateTest {
             params.put("indexName", 123);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.indexName", errors.get(0).getField());
@@ -724,7 +735,7 @@ class MongoOperationValidateTest {
             params.put("keys", keys);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters", errors.get(0).getField());
@@ -741,7 +752,7 @@ class MongoOperationValidateTest {
             params.put("indexName", "email_index");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -758,7 +769,7 @@ class MongoOperationValidateTest {
             params.put("keys", keys);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -776,7 +787,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.target", errors.get(0).getField());
@@ -793,7 +804,7 @@ class MongoOperationValidateTest {
             params.put("target", "");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.target", errors.get(0).getField());
@@ -810,7 +821,7 @@ class MongoOperationValidateTest {
             params.put("target", "new$Name");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.target", errors.get(0).getField());
@@ -827,7 +838,7 @@ class MongoOperationValidateTest {
             params.put("target", "new\0Name");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.target", errors.get(0).getField());
@@ -845,7 +856,7 @@ class MongoOperationValidateTest {
             params.put("options", "not a document");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.options", errors.get(0).getField());
@@ -862,7 +873,7 @@ class MongoOperationValidateTest {
             params.put("target", "newName");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -880,7 +891,7 @@ class MongoOperationValidateTest {
             op.setCollection("testView");
             op.setParameters(null);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters", errors.get(0).getField());
@@ -897,7 +908,7 @@ class MongoOperationValidateTest {
             params.put("pipeline", Collections.singletonList(new HashMap<>()));
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.viewOn", errors.get(0).getField());
@@ -914,7 +925,7 @@ class MongoOperationValidateTest {
             params.put("viewOn", "sourceCollection");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.pipeline", errors.get(0).getField());
@@ -932,7 +943,7 @@ class MongoOperationValidateTest {
             params.put("pipeline", "not a list");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.pipeline", errors.get(0).getField());
@@ -950,7 +961,7 @@ class MongoOperationValidateTest {
             params.put("pipeline", Arrays.asList("invalid"));
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.pipeline[0]", errors.get(0).getField());
@@ -968,7 +979,7 @@ class MongoOperationValidateTest {
             params.put("pipeline", Collections.singletonList(new HashMap<>()));
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.viewOn", errors.get(0).getField());
@@ -986,7 +997,7 @@ class MongoOperationValidateTest {
             params.put("pipeline", Collections.singletonList(new HashMap<>()));
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.viewOn", errors.get(0).getField());
@@ -1004,7 +1015,7 @@ class MongoOperationValidateTest {
             params.put("pipeline", Collections.singletonList(new HashMap<>()));
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.viewOn", errors.get(0).getField());
@@ -1023,7 +1034,7 @@ class MongoOperationValidateTest {
             params.put("options", "not a document");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.options", errors.get(0).getField());
@@ -1041,7 +1052,7 @@ class MongoOperationValidateTest {
             params.put("pipeline", Collections.singletonList(new HashMap<>()));
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -1058,7 +1069,7 @@ class MongoOperationValidateTest {
             op.setType("createCollection");
             op.setCollection("test");
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -1070,7 +1081,7 @@ class MongoOperationValidateTest {
             op.setType("dropCollection");
             op.setCollection("test");
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -1082,7 +1093,7 @@ class MongoOperationValidateTest {
             op.setType("dropView");
             op.setCollection("testView");
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -1097,7 +1108,7 @@ class MongoOperationValidateTest {
             params.put("capped", true);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters", errors.get(0).getField());
@@ -1112,7 +1123,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -1127,7 +1138,7 @@ class MongoOperationValidateTest {
             params.put("writeConcern", "majority");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters", errors.get(0).getField());
@@ -1142,7 +1153,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -1157,7 +1168,7 @@ class MongoOperationValidateTest {
             params.put("force", true);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters", errors.get(0).getField());
@@ -1172,7 +1183,7 @@ class MongoOperationValidateTest {
             op.setCollection("testView");
             op.setParameters(new HashMap<>());
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -1190,7 +1201,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(null);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters", errors.get(0).getField());
@@ -1205,7 +1216,7 @@ class MongoOperationValidateTest {
             op.setCollection("test");
             op.setParameters(new HashMap<>());
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters", errors.get(0).getField());
@@ -1222,7 +1233,7 @@ class MongoOperationValidateTest {
             params.put("validationLevel", "banana");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.validationLevel", errors.get(0).getField());
@@ -1239,7 +1250,7 @@ class MongoOperationValidateTest {
             params.put("validationAction", "ignore");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.validationAction", errors.get(0).getField());
@@ -1256,7 +1267,7 @@ class MongoOperationValidateTest {
             params.put("validator", "not a map");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.validator", errors.get(0).getField());
@@ -1274,7 +1285,7 @@ class MongoOperationValidateTest {
             params.put("validationAction", "ignore");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(2, errors.size());
         }
@@ -1291,7 +1302,7 @@ class MongoOperationValidateTest {
             params.put("validator", validator);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -1307,7 +1318,7 @@ class MongoOperationValidateTest {
                 params.put("validationLevel", level);
                 op.setParameters(params);
 
-                List<TemplatePayloadValidationError> errors = op.validate();
+                List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
                 assertTrue(errors.isEmpty(), "Expected no errors for validationLevel='" + level + "'");
             }
@@ -1324,7 +1335,7 @@ class MongoOperationValidateTest {
                 params.put("validationAction", action);
                 op.setParameters(params);
 
-                List<TemplatePayloadValidationError> errors = op.validate();
+                List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
                 assertTrue(errors.isEmpty(), "Expected no errors for validationAction='" + action + "'");
             }
@@ -1344,7 +1355,7 @@ class MongoOperationValidateTest {
             params.put("validationAction", "error");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -1364,7 +1375,7 @@ class MongoOperationValidateTest {
             params.put("documents", new ArrayList<>());
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(2, errors.size());
         }
@@ -1389,7 +1400,7 @@ class MongoOperationValidateTest {
             params.put("unknownKey", "value");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.unknownKey", errors.get(0).getField());
@@ -1410,7 +1421,7 @@ class MongoOperationValidateTest {
             params.put("typoKey", "value");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.typoKey", errors.get(0).getField());
@@ -1428,7 +1439,7 @@ class MongoOperationValidateTest {
             params.put("unknownKey", "value");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.unknownKey", errors.get(0).getField());
@@ -1448,7 +1459,7 @@ class MongoOperationValidateTest {
             params.put("badParam", "value");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.badParam", errors.get(0).getField());
@@ -1466,7 +1477,7 @@ class MongoOperationValidateTest {
             params.put("extra", "value");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.extra", errors.get(0).getField());
@@ -1484,7 +1495,7 @@ class MongoOperationValidateTest {
             params.put("badParam", "value");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.badParam", errors.get(0).getField());
@@ -1503,7 +1514,7 @@ class MongoOperationValidateTest {
             params.put("badParam", "value");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.badParam", errors.get(0).getField());
@@ -1521,7 +1532,7 @@ class MongoOperationValidateTest {
             params.put("unknownKey", "value");
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.unknownKey", errors.get(0).getField());
@@ -1550,7 +1561,7 @@ class MongoOperationValidateTest {
             params.put("options", options);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.options.banana", errors.get(0).getField());
@@ -1573,7 +1584,7 @@ class MongoOperationValidateTest {
             params.put("options", options);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.options.unknownOption", errors.get(0).getField());
@@ -1595,7 +1606,7 @@ class MongoOperationValidateTest {
             params.put("options", options);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.options.invalidOption", errors.get(0).getField());
@@ -1616,7 +1627,7 @@ class MongoOperationValidateTest {
             params.put("options", options);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.options.unknownViewOption", errors.get(0).getField());
@@ -1636,7 +1647,7 @@ class MongoOperationValidateTest {
             params.put("options", options);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(1, errors.size());
             assertEquals("parameters.options.badOption", errors.get(0).getField());
@@ -1659,7 +1670,7 @@ class MongoOperationValidateTest {
             params.put("options", options);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertTrue(errors.isEmpty());
         }
@@ -1682,9 +1693,122 @@ class MongoOperationValidateTest {
             params.put("options", options);
             op.setParameters(params);
 
-            List<TemplatePayloadValidationError> errors = op.validate();
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(2, errors.size());
+        }
+    }
+
+    @Nested
+    @DisplayName("Transactional Validation Tests")
+    class TransactionalValidationTests {
+
+        private final TemplateValidationContext TRANSACTIONAL_CONTEXT = transactionalContext();
+
+        @ParameterizedTest(name = "WHEN transactional context + non-transactional op ''{0}'' THEN error")
+        @ValueSource(strings = {
+                "createCollection", "dropCollection", "createIndex", "dropIndex",
+                "renameCollection", "modifyCollection", "createView", "dropView"
+        })
+        void transactionalContextWithNonTransactionalOpReturnsError(String opType) {
+            MongoOperation op = buildValidOperation(opType);
+
+            List<TemplatePayloadValidationError> errors = op.validate(TRANSACTIONAL_CONTEXT);
+
+            assertTrue(errors.stream().anyMatch(e ->
+                            "type".equals(e.getField()) && e.getMessage().contains("does not support transactions")),
+                    "Expected transactional incompatibility error for type '" + opType + "'");
+        }
+
+        @ParameterizedTest(name = "WHEN transactional context + transactional op ''{0}'' THEN no transactional error")
+        @ValueSource(strings = {"insert", "update", "delete"})
+        void transactionalContextWithTransactionalOpReturnsNoError(String opType) {
+            MongoOperation op = buildValidOperation(opType);
+
+            List<TemplatePayloadValidationError> errors = op.validate(TRANSACTIONAL_CONTEXT);
+
+            assertTrue(errors.stream().noneMatch(e ->
+                            "type".equals(e.getField()) && e.getMessage().contains("does not support transactions")),
+                    "Expected no transactional incompatibility error for type '" + opType + "'");
+        }
+
+        @ParameterizedTest(name = "WHEN non-transactional context + transactional op ''{0}'' THEN no error")
+        @ValueSource(strings = {"insert", "update", "delete"})
+        void nonTransactionalContextWithTransactionalOpReturnsNoError(String opType) {
+            MongoOperation op = buildValidOperation(opType);
+
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
+
+            assertTrue(errors.isEmpty(),
+                    "Expected no errors for transactional op '" + opType + "' in non-transactional context");
+        }
+
+        @ParameterizedTest(name = "WHEN non-transactional context + non-transactional op ''{0}'' THEN no error")
+        @ValueSource(strings = {
+                "createCollection", "dropCollection", "createIndex", "dropIndex",
+                "renameCollection", "modifyCollection", "createView", "dropView"
+        })
+        void nonTransactionalContextWithNonTransactionalOpReturnsNoError(String opType) {
+            MongoOperation op = buildValidOperation(opType);
+
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
+
+            assertTrue(errors.isEmpty(),
+                    "Expected no errors for non-transactional op '" + opType + "' in non-transactional context");
+        }
+
+        private MongoOperation buildValidOperation(String opType) {
+            MongoOperation op = new MongoOperation();
+            op.setType(opType);
+            op.setCollection("testCollection");
+            op.setParameters(buildRequiredParams(opType));
+            return op;
+        }
+
+        private Map<String, Object> buildRequiredParams(String opType) {
+            Map<String, Object> params = new HashMap<>();
+            switch (opType) {
+                case "insert":
+                    List<Map<String, Object>> docs = new ArrayList<>();
+                    Map<String, Object> doc = new HashMap<>();
+                    doc.put("name", "test");
+                    docs.add(doc);
+                    params.put("documents", docs);
+                    break;
+                case "update":
+                    params.put("filter", new HashMap<>());
+                    Map<String, Object> update = new HashMap<>();
+                    update.put("$set", Collections.singletonMap("field", "value"));
+                    params.put("update", update);
+                    break;
+                case "delete":
+                    params.put("filter", new HashMap<>());
+                    break;
+                case "createIndex":
+                    params.put("keys", Collections.singletonMap("field", 1));
+                    break;
+                case "dropIndex":
+                    params.put("indexName", "test_index");
+                    break;
+                case "renameCollection":
+                    params.put("target", "newName");
+                    break;
+                case "modifyCollection":
+                    params.put("validationLevel", "strict");
+                    break;
+                case "createView":
+                    params.put("viewOn", "sourceCollection");
+                    params.put("pipeline", Collections.singletonList(new HashMap<>()));
+                    break;
+                case "createCollection":
+                case "dropCollection":
+                case "dropView":
+                    // No parameters needed
+                    return null;
+                default:
+                    break;
+            }
+            return params;
         }
     }
 }
