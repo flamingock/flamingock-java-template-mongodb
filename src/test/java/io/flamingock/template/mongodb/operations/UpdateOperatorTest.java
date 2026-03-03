@@ -234,6 +234,53 @@ class UpdateOperatorTest extends AbstractMongoOperatorTest {
         assertNull(alice.getInteger("score"), "Score field should be removed");
     }
 
+    @Test
+    @DisplayName("WHEN update with collation locale=en strength=2 THEN case-insensitive match succeeds")
+    void updateWithCollationCaseInsensitiveTest() {
+        // Insert a document with lowercase name
+        mongoDatabase.getCollection(COLLECTION_NAME).drop();
+        mongoDatabase.createCollection(COLLECTION_NAME);
+        mongoDatabase.getCollection(COLLECTION_NAME)
+                .insertOne(new org.bson.Document("name", "alice").append("role", "user"));
+
+        MongoOperation operation = new MongoOperation();
+        operation.setType("update");
+        operation.setCollection(COLLECTION_NAME);
+
+        Map<String, Object> params = new HashMap<>();
+
+        // Filter with uppercase — requires collation to match
+        Map<String, Object> filter = new HashMap<>();
+        filter.put("name", "ALICE");
+        params.put("filter", filter);
+
+        Map<String, Object> update = new HashMap<>();
+        Map<String, Object> setFields = new HashMap<>();
+        setFields.put("role", "admin");
+        update.put("$set", setFields);
+        params.put("update", update);
+
+        // Collation with strength=2 enables case-insensitive matching
+        Map<String, Object> options = new HashMap<>();
+        Map<String, Object> collation = new HashMap<>();
+        collation.put("locale", "en");
+        collation.put("strength", 2);
+        options.put("collation", collation);
+        params.put("options", options);
+
+        operation.setParameters(params);
+
+        UpdateOperator operator = new UpdateOperator(mongoDatabase, operation);
+        operator.apply(null);
+
+        Document alice = mongoDatabase.getCollection(COLLECTION_NAME)
+                .find(new Document("name", "alice"))
+                .first();
+        assertNotNull(alice, "Document should still exist");
+        assertEquals("admin", alice.getString("role"),
+                "Role should be updated via case-insensitive collation match");
+    }
+
     private long getDocumentCount() {
         return mongoDatabase.getCollection(COLLECTION_NAME).countDocuments();
     }

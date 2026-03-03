@@ -58,6 +58,23 @@ class DropViewOperatorTest extends AbstractMongoOperatorTest {
         assertFalse(collectionExists(VIEW_NAME), "View should have been dropped");
     }
 
+    @Test
+    @DisplayName("WHEN dropView is applied on non-existent view THEN no exception is thrown")
+    void dropNonExistentViewSucceedsSilentlyTest() {
+        assertFalse(collectionExists(VIEW_NAME), "View should not exist before drop");
+
+        MongoOperation operation = new MongoOperation();
+        operation.setType("dropView");
+        operation.setCollection(VIEW_NAME);
+        operation.setParameters(new HashMap<>());
+
+        DropViewOperator operator = new DropViewOperator(mongoDatabase, operation);
+        // MongoDB drop() is natively idempotent — no exception on non-existent view
+        operator.apply(null);
+
+        assertFalse(collectionExists(VIEW_NAME), "View should still not exist");
+    }
+
     private boolean collectionExists(String collectionName) {
         List<String> collections = mongoDatabase.listCollectionNames().into(new ArrayList<>());
         return collections.contains(collectionName);
