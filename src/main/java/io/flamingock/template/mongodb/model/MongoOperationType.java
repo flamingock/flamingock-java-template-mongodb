@@ -45,28 +45,31 @@ import java.util.function.BiFunction;
 
 public enum MongoOperationType {
 
-    CREATE_COLLECTION("createCollection", CreateCollectionOperator::new, new NoParametersValidator("CreateCollection")),
-    CREATE_INDEX("createIndex", CreateIndexOperator::new, new CreateIndexParametersValidator()),
-    INSERT("insert", InsertOperator::new, new InsertParametersValidator()),
-    UPDATE("update", UpdateOperator::new, new UpdateParametersValidator()),
-    DELETE("delete", DeleteOperator::new, new DeleteParametersValidator()),
-    DROP_COLLECTION("dropCollection", DropCollectionOperator::new, new NoParametersValidator("DropCollection")),
-    DROP_INDEX("dropIndex", DropIndexOperator::new, new DropIndexParametersValidator()),
-    RENAME_COLLECTION("renameCollection", RenameCollectionOperator::new, new RenameCollectionParametersValidator()),
-    MODIFY_COLLECTION("modifyCollection", ModifyCollectionOperator::new, new ModifyCollectionParametersValidator()),
-    CREATE_VIEW("createView", CreateViewOperator::new, new CreateViewParametersValidator()),
-    DROP_VIEW("dropView", DropViewOperator::new, new NoParametersValidator("DropView"));
+    CREATE_COLLECTION("createCollection", CreateCollectionOperator::new, new NoParametersValidator("CreateCollection"), false),
+    CREATE_INDEX("createIndex", CreateIndexOperator::new, new CreateIndexParametersValidator(), false),
+    INSERT("insert", InsertOperator::new, new InsertParametersValidator(), true),
+    UPDATE("update", UpdateOperator::new, new UpdateParametersValidator(), true),
+    DELETE("delete", DeleteOperator::new, new DeleteParametersValidator(), true),
+    DROP_COLLECTION("dropCollection", DropCollectionOperator::new, new NoParametersValidator("DropCollection"), false),
+    DROP_INDEX("dropIndex", DropIndexOperator::new, new DropIndexParametersValidator(), false),
+    RENAME_COLLECTION("renameCollection", RenameCollectionOperator::new, new RenameCollectionParametersValidator(), false),
+    MODIFY_COLLECTION("modifyCollection", ModifyCollectionOperator::new, new ModifyCollectionParametersValidator(), false),
+    CREATE_VIEW("createView", CreateViewOperator::new, new CreateViewParametersValidator(), false),
+    DROP_VIEW("dropView", DropViewOperator::new, new NoParametersValidator("DropView"), false);
 
     private final String value;
     private final BiFunction<MongoDatabase, MongoOperation, MongoOperator> createOperatorFunction;
     private final OperationValidator operationValidator;
+    private final boolean transactional;
 
     MongoOperationType(String value,
                        BiFunction<MongoDatabase, MongoOperation, MongoOperator> createOperatorFunction,
-                       OperationValidator operationValidator) {
+                       OperationValidator operationValidator,
+                       boolean transactional) {
         this.value = value;
         this.createOperatorFunction = createOperatorFunction;
         this.operationValidator = operationValidator;
+        this.transactional = transactional;
     }
 
     public static MongoOperationType findByTypeOrThrow(String typeValue) {
@@ -88,6 +91,10 @@ public enum MongoOperationType {
 
     public OperationValidator getOperationValidator() {
         return operationValidator;
+    }
+
+    public boolean isTransactional() {
+        return transactional;
     }
 
     private boolean matches(String operationType) {
