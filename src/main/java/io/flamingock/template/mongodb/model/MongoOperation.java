@@ -19,6 +19,7 @@ import com.mongodb.client.MongoDatabase;
 import io.flamingock.api.annotations.NonLockGuarded;
 import io.flamingock.api.NonLockGuardedType;
 import io.flamingock.api.template.TemplatePayload;
+import io.flamingock.api.template.TemplatePayloadInfo;
 import io.flamingock.api.template.TemplatePayloadValidationError;
 import io.flamingock.api.template.TemplateValidationContext;
 import io.flamingock.template.mongodb.model.operator.MongoOperator;
@@ -85,6 +86,14 @@ public class MongoOperation implements TemplatePayload {
         return sb.toString();
     }
 
+    @Override
+    public TemplatePayloadInfo getInfo() {
+        TemplatePayloadInfo info = new TemplatePayloadInfo();
+        MongoOperationType.findByType(type)
+                .ifPresent(opType -> info.setSupportsTransactions(opType.isTransactional()));
+        return info;
+    }
+
     private static final TypeValidator TYPE_VALIDATOR = new TypeValidator();
     private static final CollectionValidator COLLECTION_VALIDATOR = new CollectionValidator();
 
@@ -102,13 +111,6 @@ public class MongoOperation implements TemplatePayload {
 
         errors.addAll(COLLECTION_VALIDATOR.validate(this));
         errors.addAll(operationType.getOperationValidator().validate(this));
-
-        if (!operationType.isTransactional() && context.isTransactional()) {
-            errors.add(new TemplatePayloadValidationError("type",
-                    "Operation type '" + type + "' does not support transactions. "
-                            + "Transactional changes require all operations to be transactional "
-                            + "(insert, update, delete)."));
-        }
 
         return errors;
     }

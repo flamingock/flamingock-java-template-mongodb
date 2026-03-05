@@ -32,12 +32,6 @@ class MongoOperationValidateTest {
 
     private static final TemplateValidationContext NON_TRANSACTIONAL_CONTEXT = new TemplateValidationContext();
 
-    private static TemplateValidationContext transactionalContext() {
-        TemplateValidationContext ctx = new TemplateValidationContext();
-        ctx.setTransactional(true);
-        return ctx;
-    }
-
     @Nested
     @DisplayName("Common Validation Tests")
     class CommonValidationTests {
@@ -1696,119 +1690,6 @@ class MongoOperationValidateTest {
             List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
 
             assertEquals(2, errors.size());
-        }
-    }
-
-    @Nested
-    @DisplayName("Transactional Validation Tests")
-    class TransactionalValidationTests {
-
-        private final TemplateValidationContext TRANSACTIONAL_CONTEXT = transactionalContext();
-
-        @ParameterizedTest(name = "WHEN transactional context + non-transactional op ''{0}'' THEN error")
-        @ValueSource(strings = {
-                "createCollection", "dropCollection", "createIndex", "dropIndex",
-                "renameCollection", "modifyCollection", "createView", "dropView"
-        })
-        void transactionalContextWithNonTransactionalOpReturnsError(String opType) {
-            MongoOperation op = buildValidOperation(opType);
-
-            List<TemplatePayloadValidationError> errors = op.validate(TRANSACTIONAL_CONTEXT);
-
-            assertTrue(errors.stream().anyMatch(e ->
-                            "type".equals(e.getField()) && e.getMessage().contains("does not support transactions")),
-                    "Expected transactional incompatibility error for type '" + opType + "'");
-        }
-
-        @ParameterizedTest(name = "WHEN transactional context + transactional op ''{0}'' THEN no transactional error")
-        @ValueSource(strings = {"insert", "update", "delete"})
-        void transactionalContextWithTransactionalOpReturnsNoError(String opType) {
-            MongoOperation op = buildValidOperation(opType);
-
-            List<TemplatePayloadValidationError> errors = op.validate(TRANSACTIONAL_CONTEXT);
-
-            assertTrue(errors.stream().noneMatch(e ->
-                            "type".equals(e.getField()) && e.getMessage().contains("does not support transactions")),
-                    "Expected no transactional incompatibility error for type '" + opType + "'");
-        }
-
-        @ParameterizedTest(name = "WHEN non-transactional context + transactional op ''{0}'' THEN no error")
-        @ValueSource(strings = {"insert", "update", "delete"})
-        void nonTransactionalContextWithTransactionalOpReturnsNoError(String opType) {
-            MongoOperation op = buildValidOperation(opType);
-
-            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
-
-            assertTrue(errors.isEmpty(),
-                    "Expected no errors for transactional op '" + opType + "' in non-transactional context");
-        }
-
-        @ParameterizedTest(name = "WHEN non-transactional context + non-transactional op ''{0}'' THEN no error")
-        @ValueSource(strings = {
-                "createCollection", "dropCollection", "createIndex", "dropIndex",
-                "renameCollection", "modifyCollection", "createView", "dropView"
-        })
-        void nonTransactionalContextWithNonTransactionalOpReturnsNoError(String opType) {
-            MongoOperation op = buildValidOperation(opType);
-
-            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
-
-            assertTrue(errors.isEmpty(),
-                    "Expected no errors for non-transactional op '" + opType + "' in non-transactional context");
-        }
-
-        private MongoOperation buildValidOperation(String opType) {
-            MongoOperation op = new MongoOperation();
-            op.setType(opType);
-            op.setCollection("testCollection");
-            op.setParameters(buildRequiredParams(opType));
-            return op;
-        }
-
-        private Map<String, Object> buildRequiredParams(String opType) {
-            Map<String, Object> params = new HashMap<>();
-            switch (opType) {
-                case "insert":
-                    List<Map<String, Object>> docs = new ArrayList<>();
-                    Map<String, Object> doc = new HashMap<>();
-                    doc.put("name", "test");
-                    docs.add(doc);
-                    params.put("documents", docs);
-                    break;
-                case "update":
-                    params.put("filter", new HashMap<>());
-                    Map<String, Object> update = new HashMap<>();
-                    update.put("$set", Collections.singletonMap("field", "value"));
-                    params.put("update", update);
-                    break;
-                case "delete":
-                    params.put("filter", new HashMap<>());
-                    break;
-                case "createIndex":
-                    params.put("keys", Collections.singletonMap("field", 1));
-                    break;
-                case "dropIndex":
-                    params.put("indexName", "test_index");
-                    break;
-                case "renameCollection":
-                    params.put("target", "newName");
-                    break;
-                case "modifyCollection":
-                    params.put("validationLevel", "strict");
-                    break;
-                case "createView":
-                    params.put("viewOn", "sourceCollection");
-                    params.put("pipeline", Collections.singletonList(new HashMap<>()));
-                    break;
-                case "createCollection":
-                case "dropCollection":
-                case "dropView":
-                    // No parameters needed
-                    return null;
-                default:
-                    break;
-            }
-            return params;
         }
     }
 }
