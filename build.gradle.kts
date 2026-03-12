@@ -16,7 +16,8 @@ repositories {
 }
 
 dependencies {
-    implementation("io.flamingock:flamingock-core-commons:$flamingockVersion")
+    implementation("io.flamingock:flamingock-core-api:${flamingockVersion}")//we need nullable
+    implementation("io.flamingock:flamingock-template-api:$flamingockVersion")
     implementation("org.slf4j:slf4j-api:1.7.36")
     compileOnly("org.mongodb:mongodb-driver-sync:4.0.0")
 

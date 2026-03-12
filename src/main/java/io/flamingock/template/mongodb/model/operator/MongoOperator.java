@@ -19,11 +19,11 @@ import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoDatabase;
 import io.flamingock.template.mongodb.MongoTemplateExecutionException;
 import io.flamingock.template.mongodb.model.MongoOperation;
-import io.flamingock.internal.util.log.FlamingockLoggerFactory;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class MongoOperator {
-    protected static final Logger logger = FlamingockLoggerFactory.getLogger("MongoTemplate");
+    protected static final Logger logger = LoggerFactory.getLogger("MongoTemplate");
 
     protected final MongoDatabase mongoDatabase;
     protected final MongoOperation op;

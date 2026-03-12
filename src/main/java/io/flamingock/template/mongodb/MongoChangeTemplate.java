@@ -17,10 +17,10 @@ package io.flamingock.template.mongodb;
 
 import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoDatabase;
-import io.flamingock.api.annotations.Apply;
+import io.flamingock.api.annotations.ApplyTemplate;
 import io.flamingock.api.annotations.ChangeTemplate;
 import io.flamingock.api.annotations.Nullable;
-import io.flamingock.api.annotations.Rollback;
+import io.flamingock.api.annotations.RollbackTemplate;
 import io.flamingock.api.template.AbstractChangeTemplate;
 import io.flamingock.api.template.wrappers.TemplateVoid;
 import io.flamingock.api.template.TemplateValidationContext;
@@ -90,7 +90,7 @@ public class MongoChangeTemplate extends AbstractChangeTemplate<TemplateVoid, Mo
      * via {@link MongoOperation#validate(TemplateValidationContext)}, which delegates to the appropriate
      * {@code ParametersValidator} for each operation type. No validation is performed here.
      */
-    @Apply
+    @ApplyTemplate
     public void apply(MongoDatabase db, @Nullable ClientSession clientSession) {
         validateSession(clientSession);
         applyPayload.getOperator(db).apply(clientSession);
@@ -103,7 +103,7 @@ public class MongoChangeTemplate extends AbstractChangeTemplate<TemplateVoid, Mo
      * via {@link MongoOperation#validate(TemplateValidationContext)}, which delegates to the appropriate
      * {@code ParametersValidator} for each operation type. No validation is performed here.
      */
-    @Rollback
+    @RollbackTemplate
     public void rollback(MongoDatabase db, @Nullable ClientSession clientSession) {
         validateSession(clientSession);
         rollbackPayload.getOperator(db).apply(clientSession);
