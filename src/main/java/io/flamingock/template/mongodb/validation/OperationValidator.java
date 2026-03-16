@@ -58,6 +58,22 @@ public interface OperationValidator {
         return errors;
     }
 
+    static List<TemplatePayloadValidationError> checkNullOptionValues(
+            Map<String, Object> options, String operationName) {
+        List<TemplatePayloadValidationError> errors = new ArrayList<>();
+        if (options == null) {
+            return errors;
+        }
+        for (Map.Entry<String, Object> entry : options.entrySet()) {
+            if (entry.getValue() == null) {
+                errors.add(new TemplatePayloadValidationError(
+                        "parameters.options." + entry.getKey(),
+                        operationName + " option '" + entry.getKey() + "' cannot be null"));
+            }
+        }
+        return errors;
+    }
+
     static List<TemplatePayloadValidationError> checkListElementTypes(
             List<?> list, String fieldPath, String elementName) {
         List<TemplatePayloadValidationError> errors = new ArrayList<>();

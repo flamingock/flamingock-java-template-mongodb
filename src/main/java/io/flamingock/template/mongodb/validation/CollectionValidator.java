@@ -39,6 +39,9 @@ public class CollectionValidator implements OperationValidator {
         } else if (collection.contains("\0")) {
             return Collections.singletonList(
                     new TemplatePayloadValidationError("collection", "Collection name cannot contain null character"));
+        } else if (collection.startsWith("system.")) {
+            return Collections.singletonList(
+                    new TemplatePayloadValidationError("collection", "Collection name cannot start with 'system.': " + collection));
         }
 
         return Collections.emptyList();

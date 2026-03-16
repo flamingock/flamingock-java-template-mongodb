@@ -105,28 +105,28 @@ public final class MapperUtil {
         Collation.Builder builder = Collation.builder().locale((String) locale);
 
         if (map.containsKey("caseLevel")) {
-            builder.caseLevel((Boolean) map.get("caseLevel"));
+            builder.caseLevel(getBoolean(map, "caseLevel"));
         }
         if (map.containsKey("caseFirst")) {
-            builder.collationCaseFirst(CollationCaseFirst.fromString((String) map.get("caseFirst")));
+            builder.collationCaseFirst(CollationCaseFirst.fromString(getString(map, "caseFirst")));
         }
         if (map.containsKey("strength")) {
-            builder.collationStrength(CollationStrength.fromInt(((Number) map.get("strength")).intValue()));
+            builder.collationStrength(CollationStrength.fromInt(getInteger(map, "strength")));
         }
         if (map.containsKey("numericOrdering")) {
-            builder.numericOrdering((Boolean) map.get("numericOrdering"));
+            builder.numericOrdering(getBoolean(map, "numericOrdering"));
         }
         if (map.containsKey("alternate")) {
-            builder.collationAlternate(CollationAlternate.fromString((String) map.get("alternate")));
+            builder.collationAlternate(CollationAlternate.fromString(getString(map, "alternate")));
         }
         if (map.containsKey("maxVariable")) {
-            builder.collationMaxVariable(CollationMaxVariable.fromString((String) map.get("maxVariable")));
+            builder.collationMaxVariable(CollationMaxVariable.fromString(getString(map, "maxVariable")));
         }
         if (map.containsKey("normalization")) {
-            builder.normalization((Boolean) map.get("normalization"));
+            builder.normalization(getBoolean(map, "normalization"));
         }
         if (map.containsKey("backwards")) {
-            builder.backwards((Boolean) map.get("backwards"));
+            builder.backwards(getBoolean(map, "backwards"));
         }
         return builder.build();
     }

@@ -39,6 +39,12 @@ public class RenameCollectionOperator extends MongoOperator {
             return;
         }
 
+        if (!sourceExists) {
+            logger.warn("Source collection '{}' does not exist and target '{}' is also absent — skipping renameCollection",
+                    op.getCollection(), targetName);
+            return;
+        }
+
         MongoNamespace target = new MongoNamespace(mongoDatabase.getName(), targetName);
         RenameCollectionOptions options = RenameCollectionOptionsMapper.map(op.getOptions());
         mongoDatabase.getCollection(op.getCollection()).renameCollection(target, options);

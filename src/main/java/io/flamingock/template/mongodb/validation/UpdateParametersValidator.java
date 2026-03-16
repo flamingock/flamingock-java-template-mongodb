@@ -72,6 +72,7 @@ public class UpdateParametersValidator implements OperationValidator {
         } else if (options instanceof Map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> optionsMap = (Map<String, Object>) options;
+            errors.addAll(OperationValidator.checkNullOptionValues(optionsMap, "Update"));
             errors.addAll(OperationValidator.checkUnrecognizedOptionKeys(
                     optionsMap, UpdateOptionsMapper.RECOGNIZED_KEYS, "Update"));
         }

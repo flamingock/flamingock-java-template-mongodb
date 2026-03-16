@@ -1,107 +1,223 @@
-# Flamingock MongoDB Template - Comprehensive Module Analysis
+# Flamingock MongoDB Template — Comprehensive Module Analysis
 
-**Module:** `flamingock-java-template-mongodb` v1.0.0-rc.1  
-**Flamingock Core:** v1.2.0  
-**Java Target:** 8  
-**MongoDB Driver:** 4.0.0 (compileOnly)  
-**Last Updated:** 2026-03-02  
+**Module:** `flamingock-java-template-mongodb` v1.2.0-SNAPSHOT
+**Flamingock Core:** v1.2.0-beta.1
+**Java Target:** 8
+**MongoDB Driver:** 4.0.0 (compileOnly)
+**Last Updated:** 2026-03-15
 
 ---
 
 ## 1. Architecture Overview
 
-The module implements a declarative MongoDB change template for the Flamingock system evolution framework. Users define MongoDB operations in YAML files with apply/rollback step pairs. The framework parses YAML into `MongoOperation` POJOs, validates them at load time via the `TemplatePayload` contract, resolves the appropriate operator, and executes against a `MongoDatabase`.
+**Module coordinates:** `io.flamingock:flamingock-java-template-mongodb:1.2.0-SNAPSHOT`
 
 **Execution flow:**
 ```
-YAML → MongoOperation (deserialized) → MongoOperation.validate() → MongoOperationType (enum factory) → MongoOperator subclass → MongoDB Driver
+YAML
+  → MongoOperation (deserialized by framework via YAML mapper)
+  → MongoOperation.validate()  [load time — TemplatePayload contract]
+      → TypeValidator
+      → CollectionValidator
+      → OperationValidator (per-type)
+  → MongoOperationType.findByTypeOrThrow()  [enum factory]
+  → MongoOperator subclass.apply(clientSession)
+      → applyInternal(clientSession)
+      → MongoDB Driver API
 ```
 
-Structural validation runs at **load time** — before any change executes — via `MongoOperation.validate()` (implementing `TemplatePayload`). The framework calls `validate()` on both apply and rollback payloads through `AbstractTemplateLoadedChange.getValidationErrors()`. This means a malformed YAML change at step 50 is caught before steps 1–49 execute.
+Structural validation runs **at load time** — before any change executes — via `MongoOperation.validate()`. The framework calls `validate()` on both apply and rollback payloads during the loaded-change validation phase. A malformed YAML at step 50 is caught before steps 1–49 execute.
 
-**Key classes (~30 production source files):**
-- `MongoChangeTemplate` — Entry point, `@ChangeTemplate(multiStep = true)`
-- `MongoOperation` — YAML model (type, collection, parameters) + `TemplatePayload.validate()`
-- `MongoOperationType` — Enum with 11 operations + factory + validator binding
-- `CollectionValidator` — Validates collection name (null, empty, `$`, `\0`)
-- `OperationValidator` — Interface for per-operation parameter validators + unrecognized key utility
-- 8 parameter validators (`InsertParametersValidator`, `UpdateParametersValidator`, `DeleteParametersValidator`, `CreateIndexParametersValidator`, `DropIndexParametersValidator`, `RenameCollectionParametersValidator`, `CreateViewParametersValidator`, `ModifyCollectionParametersValidator`) + `NoParametersValidator` for operations that don't accept parameters
-- 11 operator classes (`CreateCollectionOperator`, `InsertOperator`, etc.)
-- 7 mapper classes (`IndexOptionsMapper`, `InsertOptionsMapper`, `UpdateOptionsMapper`, `CreateViewOptionsMapper`, `RenameCollectionOptionsMapper`, `MapperUtil`, `BsonConverter`)
+**Key classes (37 production source files):**
+
+| Class | Role |
+|---|---|
+| `MongoChangeTemplate` | Entry point. `@ChangeTemplate(multiStep = true)`. Extends `AbstractChangeTemplate<TemplateVoid, MongoOperation, MongoOperation>`. |
+| `MongoOperation` | YAML payload POJO (type, collection, parameters). Implements `TemplatePayload.validate()`. |
+| `MongoOperationType` | Enum with 11 operations, factory via `BiFunction`, validator binding. |
+| `MongoOperator` | Abstract base. Template method: `apply()` → `logOperation()` → `applyInternal()` + exception wrapping. |
+| `MongoTemplateExecutionException` | Contextual wrapper for driver exceptions (type + collection + cause). |
+| `DatabaseInspector` | Package-private DDL idempotency checks (collectionExists, indexExistsByName, indexExistsByKeys). |
+| `OperationValidator` | Functional interface. Static helpers: `checkUnrecognizedKeys`, `checkUnrecognizedOptionKeys`, `checkListElementTypes`. |
+| `TypeValidator` | Validates type is non-null, non-empty, known. |
+| `CollectionValidator` | Validates collection name (null, blank, `$`, `\0`). |
+| `*ParametersValidator` (8 classes) | One per operation with parameters. |
+| `*OptionsMapper` (6 classes) | Converts `Map<String, Object>` options to MongoDB driver option objects. |
+| `BsonConverter` | Recursive YAML-map to BsonDocument conversion. |
+| `MapperUtil` | Type-safe extraction utilities for option maps. |
+
+**Processing pipeline diagram:**
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ YAML Change Step                                                         │
+│   apply:                         rollback:                              │
+│     type: insert                   type: delete                         │
+│     collection: orders             collection: orders                   │
+│     parameters: ...                parameters: ...                      │
+└─────────┬───────────────────────────────────────┬───────────────────────┘
+          │ deserialize                             │ deserialize
+          ▼                                         ▼
+   MongoOperation                           MongoOperation
+          │                                         │
+          └──────────── validate() ─────────────────┘
+                            │ [LOAD TIME — TypeValidator, CollectionValidator,
+                            │              OperationValidator chain]
+                            ▼
+                    MongoChangeTemplate
+                      apply() / rollback()
+                            │ validateSession()
+                            ▼
+                MongoOperationType.findByTypeOrThrow()
+                            │
+                            ▼
+                    MongoOperator subclass
+                      apply(clientSession)
+                         logOperation()
+                         applyInternal(clientSession)
+                            │
+                            ▼
+                    MongoDB Driver API
+```
 
 ---
 
-## 2. Top 10 Issues (Ranked by Severity) — ALL RESOLVED
+## 2. Top 10 Issues (Ranked by Severity)
 
-All 10 issues identified in the original analysis have been resolved through multiple PRs.
+### Issue 1 — HIGH
+**Validation-mapper gap: three index options accepted by validator but throw at execution**
 
-### #1 - ~~CRITICAL: Rollback path skips validation entirely~~ RESOLVED
-**Original issue:** `MongoChangeTemplate.rollback()` did not call `MongoOperationValidator.validate()` before executing, so malformed rollback YAML ran unchecked.
-**Resolution:** Structural validation was moved into `MongoOperation.validate()` (implementing the `TemplatePayload` interface). The Flamingock framework now calls `validate()` on both apply and rollback payloads at load time via `AbstractTemplateLoadedChange.getValidationErrors()`, which invokes `validateApplyPayload()` and `validateRollbackPayload()` before any change executes. The separate `MongoOperationValidator`, `ValidationError`, and `MongoTemplateValidationException` classes were deleted as part of this refactoring. Validation is no longer a responsibility of the template's `apply()`/`rollback()` methods — the framework handles it uniformly for all payloads.
+- **File:** `IndexOptionsMapper.java:94-110`, `CreateIndexParametersValidator.java:69-70`
+- **Impact:** `bucketSize`, `wildcardProjection`, and `hidden` are present in `IndexOptionsMapper.RECOGNIZED_KEYS` (line 43-44), so `CreateIndexParametersValidator` delegates to them and treats these keys as valid. Load-time validation passes. At execution, `mapToIndexOptions()` throws `UnsupportedOperationException` with a message about the driver version. If `createIndex` is not the first step in a multi-step change, prior non-transactional steps (e.g., `createCollection`) have already executed and cannot be rolled back.
+- **Risk:** User writes a valid-looking YAML change that passes startup validation, only to fail mid-execution with a confusing `UnsupportedOperationException` (not a `MongoTemplateExecutionException`). The audit log records the change as started but not completed.
+- **Fix:** Remove `bucketSize`, `wildcardProjection`, and `hidden` from `RECOGNIZED_KEYS` and add explicit validation entries in `CreateIndexParametersValidator` that reject them with a clear message: `"'bucketSize' is not supported — removed in MongoDB driver 4.4.0"`. Alternatively, keep in `RECOGNIZED_KEYS` but add an explicit check in the validator for these three keys.
 
-### #2 - ~~HIGH: InsertOperator silently swallows null/empty documents, bypassing validation~~ RESOLVED
-**Original issue:** `InsertOperator.applyInternal()` had a redundant guard `if(op.getDocuments() == null || op.getDocuments().isEmpty()) { return; }` that silently did nothing instead of failing when documents were missing.
-**Resolution:** The silent guard was removed from `InsertOperator.applyInternal()`. Structural validation now runs at load time via `InsertParametersValidator` (called from `MongoOperation.validate()`), which catches null, empty, and malformed documents before any change executes. The operator no longer needs a defensive check — if documents are invalid, the framework rejects the change at load time.
+---
 
-### #3 - ~~HIGH: `modifyCollection` has ZERO parameter validation~~ RESOLVED
-**Original issue:** `modifyCollection` used `OperationValidator.NO_OP` in `MongoOperationType`, so none of its three parameters (`validator`, `validationLevel`, `validationAction`) were validated. A user could pass `validationLevel: "banana"` and it would pass validation, only to fail at MongoDB runtime.
-**Resolution:** `ModifyCollectionParametersValidator` now validates at load time: requires at least one recognized parameter, checks `validator` is a document (Map), checks `validationLevel` is one of `off`/`strict`/`moderate`, and checks `validationAction` is one of `error`/`warn`. Multiple errors accumulate. Wired into `MongoOperationType.MODIFY_COLLECTION` replacing the `NO_OP` validator.
+### Issue 2 — MEDIUM
+**Raw casts in `buildCollationFromMap()` without type-checking produce `ClassCastException` instead of clear validation errors**
 
-### #4 - ~~HIGH: Type-unsafe parameter extraction throughout MongoOperation~~ RESOLVED
-**Original issue:** Every parameter getter in `MongoOperation` uses `@SuppressWarnings("unchecked")` raw casts from `Map<String, Object>`, risking `ClassCastException` at runtime if YAML contained wrong-typed values. Additionally, `getOptions()` was called by operators but never validated.
-**Resolution:** All parameter validators now include `instanceof` type checks that run at load time via `MongoOperation.validate()` (the `TemplatePayload` contract). Specifically: `UpdateParametersValidator` and `DeleteParametersValidator` check that `filter` is a `Map`; `DropIndexParametersValidator` checks that `keys` is a `Map` and `indexName` is a `String`; and the 5 validators for operations that support options (`InsertParametersValidator`, `UpdateParametersValidator`, `CreateIndexParametersValidator`, `CreateViewParametersValidator`, `RenameCollectionParametersValidator`) check that `options` is a `Map` when present. Since the framework guarantees `validate()` runs before any operator executes, the `@SuppressWarnings("unchecked")` casts in getters are now effectively safe — they can never be reached with wrong-typed data.
+- **File:** `MapperUtil.java:108-129`
+- **Impact:** `buildCollationFromMap()` uses direct casts: `(Boolean) map.get("caseLevel")`, `(String) map.get("caseFirst")`, `(String) map.get("alternate")`, etc. If a YAML collation block has wrong types (e.g., `caseLevel: "yes"` instead of `true`), these throw `ClassCastException` at execution time, not `IllegalArgumentException`, and without the user-friendly `field[x] should be Y` message from `MapperUtil`'s own helper methods.
+- **Risk:** User gets an unintelligible `ClassCastException` stack trace rather than a structured error. There is no validator for collation sub-fields.
+- **Fix:** Replace raw casts with the existing `getBoolean()` / `getString()` helper methods from `MapperUtil`, e.g., `builder.caseLevel(getBoolean(map, "caseLevel"))`. This provides consistent error messages and uses the same type-checking pattern already established in the codebase.
 
-### #5 - ~~HIGH: CreateIndexOperator claims `transactional=true` but ignores the session~~ RESOLVED
-**Original issue:** Constructor passed `super(mongoDatabase, operation, true)`, declaring itself transactional. But `applyInternal()` warned about "createCollection operation" (copy-paste error — should say "createIndex") and then ignored the `clientSession` entirely. MongoDB index operations are DDL and do not participate in transactions, so the flag was incorrect.
-**Resolution:** Changed constructor to `super(mongoDatabase, operation, false)` to match all other DDL operators. Fixed the warning message from "createCollection operation" to "createIndex operation". The per-operator warning blocks were later removed entirely (see issue #6) since the base class `MongoOperator.logOperation()` already handles session mismatch logging uniformly.
+---
 
-### #6 - ~~MEDIUM: DDL operators have inconsistent session handling~~ RESOLVED
-**Original issue:** `CreateCollectionOperator` and `CreateIndexOperator` had redundant `if (clientSession != null) { logger.warn(...) }` blocks, while the other 6 DDL operators silently ignored the session. The base class `MongoOperator.logOperation()` already handles this case with an INFO log.
-**Resolution:** Removed the redundant warning blocks from `CreateCollectionOperator` and `CreateIndexOperator`. All 8 DDL operators now consistently trust the base class logging. Also removed the duplicate logger declaration from `CreateCollectionOperator` (see issue #10).
+### Issue 3 — MEDIUM
+**Explicit null values in YAML option maps are not validated and cause `IllegalArgumentException` at mapper time**
 
-### #7 - ~~MEDIUM: `getCollation()` in MapperUtil will always fail for YAML-sourced input~~ RESOLVED
-**Original issue:** `getCollation()` only accepted `Collation` instances but YAML always deserializes to `Map<String, Object>`, making the `collation` option in `IndexOptionsMapper`, `UpdateOptionsMapper`, and `CreateViewOptionsMapper` impossible to use from YAML.
-**Resolution:** Added `else if (value instanceof Map)` branch to `getCollation()` with a `buildCollationFromMap()` private method that handles all 9 Collation builder fields (`locale`, `caseLevel`, `caseFirst`, `strength`, `numericOrdering`, `alternate`, `maxVariable`, `normalization`, `backwards`). Tests added for Map with locale only, Map with all fields, and invalid type.
+- **File:** `MapperUtil.java:31-85`, `IndexOptionsMapper.java:49-113`
+- **Impact:** All `MapperUtil.get*()` helpers check `containsKey()` before being called (correct), but `Map.containsKey()` returns `true` for keys mapped to `null` in Java. If a user writes `expireAfterSeconds:` (bare key, no value) in YAML, the YAML parser produces `{expireAfterSeconds: null}`. `containsKey("expireAfterSeconds")` is true, so `getLong(options, "expireAfterSeconds")` is called, which hits `value instanceof Number` → false for null → throws `IllegalArgumentException("field[expireAfterSeconds] should be Long")`. This fails at execution time, not load time. Same applies to all other option keys.
+- **Risk:** User sees a runtime IAE rather than a load-time validation error. The change starts executing before the error is surfaced, which is the exact failure mode the `TemplatePayload` contract is designed to prevent.
+- **Fix:** Extend the option-map validators (e.g., `CreateIndexParametersValidator`) to explicitly reject null values for known keys, producing a structured `TemplatePayloadValidationError` at load time: `"'expireAfterSeconds' cannot be null"`.
 
-### #8 - ~~MEDIUM: DeleteOperator always uses `deleteMany`, no `deleteOne` support~~ RESOLVED
-**Original issue:** `DeleteOperator` always called `deleteMany()` with no way to delete a single document.
-**Resolution:** Added `multi` parameter support to `DeleteOperator`, following the same pattern as `UpdateOperator`. Default is `false` (`deleteOne`), matching MongoDB's native default. Users must explicitly set `multi: true` for `deleteMany`. `DeleteParametersValidator` validates that `multi` is a boolean when present. Existing YAML test files updated to set `multi: true` where `deleteMany` behavior is intended.
+---
 
-### #9 - ~~MEDIUM: Unknown YAML fields are silently accepted~~ RESOLVED
-**Original issue:** Unknown parameter keys (typos like `documets` instead of `documents`) were silently accepted within `parameters`.
-**Resolution:** Added a static `checkUnrecognizedKeys()` utility method to `OperationValidator` interface. Each of the 7 non-NO_OP validators now declares a `RECOGNIZED_KEYS` set and calls this utility at the end of validation. Unrecognized keys produce a validation error like `"Insert operation does not recognize parameter 'unknownKey'"`. Top-level keys only — nested fields inside `options`, `filter`, `documents`, etc. are not validated (they're opaque MongoDB driver domain). NO_OP validators (createCollection, dropCollection, dropView) are left as-is since those operations don't expect parameters. Tests added for all 8 operation types with validators.
+### Issue 4 — MEDIUM
+**`CollectionValidator` only checks two invalid characters; MongoDB's full namespace rules are broader**
 
-### #10 - ~~LOW: Duplicate logger field in CreateCollectionOperator~~ RESOLVED
-**Original issue:** `CreateCollectionOperator` declared its own `logger` which shadowed the parent's `MongoOperator.logger`, causing inconsistent logger names for the same operation.
-**Resolution:** Removed the duplicate logger declaration and unused imports from `CreateCollectionOperator`. It now inherits the parent's logger.
+- **File:** `CollectionValidator.java:27-45`, `CreateViewParametersValidator.java:57-64`, `RenameCollectionParametersValidator.java` (target name validation)
+- **Impact:** Validated characters: `$` and `\0`. Unvalidated: namespace length > 255 bytes, names starting with `system.`, names containing `.` (creates sub-collection ambiguity in some drivers). These will fail at the MongoDB layer with a driver exception rather than a structured Flamingock validation error.
+- **Risk:** User gets a raw `MongoCommandException` or driver error at execution time instead of a clear validation message.
+- **Fix:** Add checks for the additional constraints from the MongoDB documentation: `system.` prefix rejection and the 255-byte namespace limit. Optionally document which constraints are intentionally delegated to the driver.
+
+---
+
+### Issue 5 — MEDIUM
+**Unchecked casts in `MongoOperation` helpers (`getKeys`, `getFilter`, `getOptions`, `isMulti`) create `ClassCastException` risk**
+
+- **File:** `MongoOperation.java:53-73`
+- **Impact:** `getKeys()` (line 54-56), `getFilter()` (line 66-68), `getOptions()` (line 59-63), and `isMulti()` (line 70-73) all cast the raw YAML value directly without type verification. These are suppressed with `@SuppressWarnings("unchecked")`. The safety contract is that the corresponding `OperationValidator` runs first and verifies types. This contract is implicit and undocumented in the helper methods themselves.
+- **Risk:** If validators are bypassed (e.g., in tests constructing `MongoOperation` directly), or a future refactor moves validator placement, these helpers throw `ClassCastException` with no context.
+- **Fix:** Add an assertion or `instanceof` guard with a clear `IllegalStateException("getKeys() called on operation where 'keys' is not a Map — validate() must run first")` to make the precondition explicit. This costs nothing at runtime when validators run correctly and makes bugs self-evident when they don't.
+
+---
+
+### Issue 6 — LOW
+**`RenameCollectionOperator` has a gap when both source and target are absent**
+
+- **File:** `RenameCollectionOperator.java:37-44`
+- **Impact:** The idempotency check is: `!sourceExists && targetExists → already done, skip`. But `!sourceExists && !targetExists` falls through to call `mongoDatabase.getCollection(source).renameCollection(target, options)`, which throws `MongoCommandException: "the collection does not exist"`. This exception is wrapped in `MongoTemplateExecutionException` but the message is not user-friendly.
+- **Risk:** If the source collection was dropped externally (data inconsistency), the rename step fails with a confusing exception instead of a clear "source collection was not found" error.
+- **Fix:** Add the missing case:
+  ```java
+  if (!sourceExists && !targetExists) {
+      logger.warn("Neither source '{}' nor target '{}' collection exists — skipping renameCollection", op.getCollection(), targetName);
+      return;
+  }
+  ```
+  Or throw `MongoTemplateExecutionException` with an explicit message.
+
+---
+
+### Issue 7 — LOW
+**`CreateViewOperator.getPipeline()` returns null for a required-validated parameter**
+
+- **File:** `CreateViewOperator.java:50-55`
+- **Impact:** `getPipeline()` returns null when `parameters.get("pipeline") == null`. It then passes null to `mongoDatabase.createView(collection, viewOn, null, options)`, which would throw `NullPointerException` in the MongoDB driver. In practice this is protected by `CreateViewParametersValidator`, which requires `pipeline`. But the method's defensive return-null pattern contradicts the "precondition guaranteed by validator" contract established by comments in `MongoChangeTemplate`.
+- **Risk:** Low in normal operation. A test constructing `MongoOperation` without validation could NPE without a clear error.
+- **Fix:** Replace `return null` with `throw new IllegalStateException("pipeline is null — validate() guarantees it is non-null")` to make the precondition explicit. Or change to `return Collections.emptyList()` (empty pipeline = identity view), which may be more useful but changes semantics.
+
+---
+
+### Issue 8 — LOW
+**`background` index option is deprecated since MongoDB 4.2 but accepted without warning**
+
+- **File:** `IndexOptionsMapper.java:52-54`, `IndexOptionsMapper.RECOGNIZED_KEYS:40`
+- **Impact:** MongoDB deprecated background index builds in 4.2 and removed support in later versions. The mapper silently accepts and passes the `background` flag to `IndexOptions.background()`. Users running against MongoDB 5.0+ will find the flag has no effect.
+- **Risk:** Misleading behavior — the template accepts the option, no error is thrown, but nothing happens. The user assumes their index was built as background.
+- **Fix:** Log a deprecation warning when `background` key is present: `logger.warn("'background' index option is deprecated since MongoDB 4.2 and ignored in 5.0+")`.
+
+---
+
+### Issue 9 — LOW
+**`MongoOperationType` type lookup uses linear scan on every operation dispatch**
+
+- **File:** `MongoOperationType.java:75-86`
+- **Impact:** `findByTypeOrThrow()` and `findByType()` iterate all 11 enum values via `Arrays.stream()` on every call. With 11 elements the cost is negligible in practice, but the pattern does not scale if operations are added and is called once per step execution.
+- **Risk:** Zero at current scale. Technical debt.
+- **Fix:** Add a static `Map<String, MongoOperationType>` lookup table initialized in a static block. This is a standard pattern for enum value-to-constant lookups and makes the intent explicit.
+
+---
+
+### Issue 10 — LOW
+**`CreateCollection`, `DropCollection`, and `DropView` silently ignore their `options` parameter entirely without validation**
+
+- **File:** `NoParametersValidator.java:38-48`, `CreateCollectionOperator.java:29-35`
+- **Impact:** `createCollection` uses `NoParametersValidator` which rejects any non-empty parameters. MongoDB's `createCollection()` supports significant options: `validator`, `capped`, `max`, `size`, `collation`, etc. There is no way to set collection-level validation rules or create capped collections via this template. Users who need these features must write programmatic changes.
+- **Risk:** Feature gap rather than correctness issue. A user expecting these features from the template will get a validation error with no guidance about the limitation.
+- **Fix:** Either implement `CreateCollectionOptions` support (significant scope) or document the limitation explicitly in the error message: `"createCollection does not currently accept options — use a programmatic Change for collection-level validator, capped, or other options"`.
 
 ---
 
 ## 3. Operation Coverage Matrix
 
-| Operation        | Enum Value          | Operator Class             | Transactional |                     Validation                      |         Options Mapper          |     Session Handling      |           Operator Test            |        Integration Test        |
-|------------------|---------------------|----------------------------|:-------------:|:---------------------------------------------------:|:-------------------------------:|:-------------------------:|:----------------------------------:|:------------------------------:|
-| createCollection | `CREATE_COLLECTION` | `CreateCollectionOperator` |      No       |            NoParametersValidator                    |              None               | Ignores (base class logs) | `CreateCollectionOperatorTest` (4) |          YAML `_0001`          |
-| dropCollection   | `DROP_COLLECTION`   | `DropCollectionOperator`   |      No       |            NoParametersValidator                    |              None               | Ignores (base class logs) |  `DropCollectionOperatorTest` (2)  |     YAML `_0004` rollback      |
-| insert           | `INSERT`            | `InsertOperator`           |      Yes      |              Full (documents, options)              |      `InsertOptionsMapper`      |           Full            |      `InsertOperatorTest` (3) + Txn (5) + Options (3)      | YAML `_0002`, `_0003`, `_0005` |
-| update           | `UPDATE`            | `UpdateOperator`           |      Yes      |           Full (filter, update, options)            |      `UpdateOptionsMapper`      |           Full            |      `UpdateOperatorTest` (7) + Txn (3)      |              None              |
-| delete           | `DELETE`            | `DeleteOperator`           |      Yes      |                Full (filter, multi)                 |              None               |           Full            |      `DeleteOperatorTest` (5) + Txn (3)      |     YAML `_0002` rollback      |
-| createIndex      | `CREATE_INDEX`      | `CreateIndexOperator`      |      No       |                Full (keys, options)                 |      `IndexOptionsMapper`       | Ignores (base class logs) |   `CreateIndexOperatorTest` (4) + Options (3)    |     YAML `_0003`, `_0005`      |
-| dropIndex        | `DROP_INDEX`        | `DropIndexOperator`        |      No       |                  indexName or keys                  |              None               | Ignores (base class logs) |    `DropIndexOperatorTest` (7)     |     YAML `_0005` rollback      |
-| renameCollection | `RENAME_COLLECTION` | `RenameCollectionOperator` |      No       |               Full (target, options)                | `RenameCollectionOptionsMapper` | Ignores (base class logs) | `RenameCollectionOperatorTest` (6) |              None              |
-| modifyCollection | `MODIFY_COLLECTION` | `ModifyCollectionOperator` |      No       | Full (validator, validationLevel, validationAction) |              None               | Ignores (base class logs) | `ModifyCollectionOperatorTest` (5) |              None              |
-| createView       | `CREATE_VIEW`       | `CreateViewOperator`       |      No       |          Full (viewOn, pipeline, options)           |    `CreateViewOptionsMapper`    | Ignores (base class logs) |    `CreateViewOperatorTest` (4)    |              None              |
-| dropView         | `DROP_VIEW`         | `DropViewOperator`         |      No       |            NoParametersValidator                    |              None               | Ignores (base class logs) |     `DropViewOperatorTest` (2)     |              None              |
+| Operation | Enum Value | Operator Class | Transactional | Validation | Options Mapper | Session Handling | Unit Test | Integration Test |
+|---|---|---|---|---|---|---|---|---|
+| `createCollection` | `CREATE_COLLECTION` | `CreateCollectionOperator` | No | `NoParametersValidator` | None | Ignored | Yes | Yes |
+| `createIndex` | `CREATE_INDEX` | `CreateIndexOperator` | No | `CreateIndexParametersValidator` | `IndexOptionsMapper` | Ignored | Yes | Yes |
+| `insert` | `INSERT` | `InsertOperator` | Yes | `InsertParametersValidator` | `InsertOptionsMapper` | Conditional | Yes | Yes |
+| `update` | `UPDATE` | `UpdateOperator` | Yes | `UpdateParametersValidator` | `UpdateOptionsMapper` | Conditional | Yes | Yes |
+| `delete` | `DELETE` | `DeleteOperator` | Yes | `DeleteParametersValidator` | None | Conditional | Yes | Yes |
+| `dropCollection` | `DROP_COLLECTION` | `DropCollectionOperator` | No | `NoParametersValidator` | None | **Ignored silently** | Yes | Yes |
+| `dropIndex` | `DROP_INDEX` | `DropIndexOperator` | No | `DropIndexParametersValidator` | None | Ignored | Yes | Yes |
+| `renameCollection` | `RENAME_COLLECTION` | `RenameCollectionOperator` | No | `RenameCollectionParametersValidator` | `RenameCollectionOptionsMapper` | Ignored | Yes | Yes |
+| `modifyCollection` | `MODIFY_COLLECTION` | `ModifyCollectionOperator` | No | `ModifyCollectionParametersValidator` | None | Ignored | Yes | Yes |
+| `createView` | `CREATE_VIEW` | `CreateViewOperator` | No | `CreateViewParametersValidator` | `CreateViewOptionsMapper` | Ignored | Yes | Yes |
+| `dropView` | `DROP_VIEW` | `DropViewOperator` | No | `NoParametersValidator` | None | **Ignored silently** | Yes | Yes |
 
-### Coverage Notes:
-- **5 of 11 operations** have integration test coverage via YAML changes (createCollection, insert, delete, createIndex, dropIndex)
-- **6 operations** are only tested at the operator unit level: update, renameCollection, modifyCollection, createView, dropView, dropCollection (though dropCollection appears in YAML rollback steps)
-- **3 transactional operators** (insert, update, delete) now have dedicated `ClientSession` tests — 11 tests across 3 transactional test classes exercise session-with-commit, session-with-options, and session-with-abort paths
-- **Options integration** tested end-to-end: insert (`bypassDocumentValidation`, `ordered`), createIndex (`expireAfterSeconds`, `sparse`, `partialFilterExpression`), update (`collation`)
-- `MongoChangeTemplate.validateSession()` tested for both apply and rollback paths
-- All 11 operations now have comprehensive load-time validation via `MongoOperation.validate()`, including unrecognized option key detection for the 5 operations that support `options`
-- All 8 DDL operators now consistently delegate session handling to the base class `MongoOperator.logOperation()`
-- All operators wrap MongoDB driver exceptions with template-level context via `MongoTemplateExecutionException`
+**Anomalies:**
+- `dropCollection` and `dropView` are identical in implementation (both call `collection.drop()` without session). Consistent, but worth noting.
+- `delete` has no options mapper, meaning MongoDB delete options (collation, hint) are not supported. This is a feature gap.
+- `createCollection`, `dropCollection`, `dropView`, `dropIndex`, `createIndex` all ignore `clientSession` entirely. This is correct since they are non-transactional, and `MongoOperator.logOperation()` logs a warning when a session is present on a non-transactional operation.
+
+**Coverage notes:**
+- All 11 operations have unit/integration tests
+- Transactional paths (insert, update, delete with `ClientSession`) have dedicated transactional test classes
+- **Gap:** No test exercises the `bucketSize`/`wildcardProjection`/`hidden` execution-time failure (Issue 1)
+- **Gap:** No test exercises null-valued option keys (Issue 3)
+- **Gap:** No test exercises `renameCollection` with both source and target absent (Issue 6)
+- **Gap:** No test for collation sub-field type errors (Issue 2)
 
 ---
 
@@ -109,311 +225,345 @@ All 10 issues identified in the original analysis have been resolved through mul
 
 ### 4.1 Current Test Inventory
 
-| Test Class                          | Test Count |                  Type                  | Docker Required |
-|-------------------------------------|:----------:|:--------------------------------------:|:---------------:|
-| `MongoChangeTemplateTest`           |     7      | Integration (full Flamingock pipeline) |       Yes       |
-| `MongoOperationValidateTest`        |     94     |   Unit (pure logic, nested classes)    |       No        |
-| `InsertOperatorTest`                |     3      |      Integration (operator-level)      |       Yes       |
-| `InsertOperatorTransactionalTest`   |     5      |   Integration (transactional path)     |       Yes       |
-| `InsertOperatorOptionsTest`         |     3      |    Integration (options end-to-end)    |       Yes       |
-| `UpdateOperatorTest`                |     7      |      Integration (operator-level)      |       Yes       |
-| `UpdateOperatorTransactionalTest`   |     3      |   Integration (transactional path)     |       Yes       |
-| `DeleteOperatorTest`                |     5      |      Integration (operator-level)      |       Yes       |
-| `DeleteOperatorTransactionalTest`   |     3      |   Integration (transactional path)     |       Yes       |
-| `CreateIndexOperatorTest`           |     4      |      Integration (operator-level)      |       Yes       |
-| `CreateIndexOperatorOptionsTest`    |     3      |    Integration (options end-to-end)    |       Yes       |
-| `DropIndexOperatorTest`             |     6      |      Integration (operator-level)      |       Yes       |
-| `CreateCollectionOperatorTest`      |     3      |      Integration (operator-level)      |       Yes       |
-| `DropCollectionOperatorTest`        |     2      |      Integration (operator-level)      |       Yes       |
-| `RenameCollectionOperatorTest`      |     5      |      Integration (operator-level)      |       Yes       |
-| `ModifyCollectionOperatorTest`      |     5      |      Integration (operator-level)      |       Yes       |
-| `CreateViewOperatorTest`            |     3      |      Integration (operator-level)      |       Yes       |
-| `DropViewOperatorTest`              |     2      |      Integration (operator-level)      |       Yes       |
-| `MultipleOperationsTest`            |     3      |      Integration (operator-level)      |       Yes       |
-| `IndexOptionsMapperTest`            |     22     |                  Unit                  |       No        |
-| `MapperUtilTest`                    |     17     |                  Unit                  |       No        |
-| `BsonConverterTest`                 |     28     |                  Unit                  |       No        |
-| `InsertOptionsMapperTest`           |     11     |                  Unit                  |       No        |
-| `UpdateOptionsMapperTest`           |     8      |                  Unit                  |       No        |
-| `RenameCollectionOptionsMapperTest` |     4      |                  Unit                  |       No        |
-| `CreateViewOptionsMapperTest`       |     3      |                  Unit                  |       No        |
-| `MongoOperatorExceptionWrappingTest`|     5      |                  Unit                  |       No        |
-| **Total**                           |  **~265**  |                                        |                 |
+| Test Class | Est. Tests | Type | External Dep. |
+|---|---|---|---|
+| `MongoChangeTemplateTest` | 7 | Integration (full framework) | MongoDB (Docker) |
+| `MongoOperationValidateTest` | ~38 | Unit | None |
+| `MongoOperationGetInfoTest` | ~11 | Unit | None |
+| `MongoOperatorExceptionWrappingTest` | ~2 | Unit | None |
+| `CreateCollectionOperatorTest` | ~4 | Integration | MongoDB (Docker) |
+| `CreateIndexOperatorTest` | ~3 | Integration | MongoDB (Docker) |
+| `CreateIndexOperatorOptionsTest` | ~10 | Integration | MongoDB (Docker) |
+| `CreateViewOperatorTest` | ~3 | Integration | MongoDB (Docker) |
+| `DeleteOperatorTest` | ~3 | Integration | MongoDB (Docker) |
+| `DeleteOperatorTransactionalTest` | ~2 | Integration | MongoDB (Docker) |
+| `DropCollectionOperatorTest` | ~2 | Integration | MongoDB (Docker) |
+| `DropIndexOperatorTest` | ~4 | Integration | MongoDB (Docker) |
+| `DropViewOperatorTest` | ~2 | Integration | MongoDB (Docker) |
+| `InsertOperatorTest` | ~3 | Integration | MongoDB (Docker) |
+| `InsertOperatorOptionsTest` | ~6 | Integration | MongoDB (Docker) |
+| `InsertOperatorTransactionalTest` | ~3 | Integration | MongoDB (Docker) |
+| `ModifyCollectionOperatorTest` | ~3 | Integration | MongoDB (Docker) |
+| `MultipleOperationsTest` | ~3 | Integration | MongoDB (Docker) |
+| `RenameCollectionOperatorTest` | ~4 | Integration | MongoDB (Docker) |
+| `UpdateOperatorTest` | ~3 | Integration | MongoDB (Docker) |
+| `UpdateOperatorTransactionalTest` | ~2 | Integration | MongoDB (Docker) |
+| `BsonConverterTest` | ~12 | Unit | None |
+| `IndexOptionsMapperTest` | ~10 | Unit | None |
+| `InsertOptionsMapperTest` | ~4 | Unit | None |
+| `UpdateOptionsMapperTest` | ~4 | Unit | None |
+| `CreateViewOptionsMapperTest` | ~3 | Unit | None |
+| `RenameCollectionOptionsMapperTest` | ~2 | Unit | None |
+| `MapperUtilTest` | ~8 | Unit | None |
+| **Total** | **~160** | | |
 
-Unit tests (no Docker): ~192 | Integration tests (Docker required): ~73
+### 4.2 Critical Missing Tests
 
-### 4.2 Remaining Test Gaps — ALL RESOLVED
+#### P0 — Must have before GA
 
-**P0 — ~~Transactional path~~** RESOLVED:
-11 dedicated transactional tests across 3 test classes (`InsertOperatorTransactionalTest`, `UpdateOperatorTransactionalTest`, `DeleteOperatorTransactionalTest`) now exercise all `clientSession != null` branches. Tests cover session-with-commit, session-with-options, and session-with-abort (proving the session is actually passed through to the driver). `AbstractTransactionalOperatorTest` provides shared session lifecycle. Additionally, 2 tests in `MongoChangeTemplateTest` verify that `validateSession()` throws `IllegalArgumentException` when `isTransactional=true` and `clientSession=null` for both apply and rollback paths.
+- **`IndexOptionsMapper`: unsupported option validation (Issue 1)**
+  Test that `createIndex` with `options: {bucketSize: 5}` produces a `TemplatePayloadValidationError` at load time (not an `UnsupportedOperationException` at execution time). Currently this test would fail — exposing the gap.
 
-**P1 — ~~Options integration~~** RESOLVED:
-9 end-to-end options tests now verify that YAML-mapped options produce the expected MongoDB behavior: `InsertOperatorOptionsTest` (3 tests: `bypassDocumentValidation`, `ordered: false`, `ordered: true`), `CreateIndexOperatorOptionsTest` (3 tests: TTL `expireAfterSeconds`, `sparse`, `partialFilterExpression`), and `UpdateOperatorTest` (+1 test: `collation` with case-insensitive matching via `locale: en, strength: 2`).
+- **Rollback payload validation parity**
+  Verify that a YAML step with an invalid rollback (e.g., `type: insert` with missing `documents`) is rejected at load time via `TemplatePayload.validate()`, not discovered when the rollback is actually triggered.
 
-**P1 — ~~Idempotency~~** RESOLVED:
-12 idempotency tests now cover all 4 DDL operators that needed handling: `CreateCollectionOperatorTest` (+2), `DropIndexOperatorTest` (+4), `CreateViewOperatorTest` (+2), `RenameCollectionOperatorTest` (+4). Tests verify both the idempotent skip path and the error path for genuine conflicts.
+- **Transactional INSERT/UPDATE/DELETE rollback path with `ClientSession`**
+  Verify that rolled-back inserts/updates/deletes within a transaction are actually reverted in MongoDB. Current transactional tests confirm the session is passed; none confirm data is actually rolled back.
 
-**P2 — ~~DDL operator gaps~~** RESOLVED:
-8 additional tests fill DDL gaps: `DropCollectionOperatorTest` (+1: native idempotency of drop on non-existent collection), `DropViewOperatorTest` (+1: same for views), `CreateIndexOperatorTest` (+2: identical index idempotency, conflicting index name with different keys), `ModifyCollectionOperatorTest` (+4: validation enforcement, metadata assertions for `validationLevel`/`validationAction`, partial parameters, idempotent re-application).
+- **`renameCollection` when both source and target are absent**
+  Should produce a clear, actionable error (Issue 6). Currently throws `MongoCommandException` wrapped in `MongoTemplateExecutionException` with the driver error message.
 
-### 4.2.1 Previously Identified Gaps — Now Resolved
+#### P1 — Important
 
-| Original Gap                          | Status   | How Resolved                                                                     |
-|---------------------------------------|----------|----------------------------------------------------------------------------------|
-| P0: Rollback validation               | RESOLVED | Framework calls `validate()` at load time for both apply and rollback payloads   |
-| P0: Validation-operator alignment     | RESOLVED | All parameter validators run `instanceof` type checks before getters are invoked (including nested element types) |
-| P0: CreateIndexOperator error message | RESOLVED | Redundant warning blocks removed; base class handles logging                     |
-| P1: modifyCollection tests            | RESOLVED | 13 dedicated validation tests in `MongoOperationValidateTest`                    |
-| P1: Edge case getters                 | RESOLVED | Type validation at load time prevents `ClassCastException` in getters            |
-| P1: deleteOne/deleteMany              | RESOLVED | `multi` parameter added and tested (6 tests in `DeleteOperatorTest`)             |
-| P1: Collation YAML                    | RESOLVED | Map-to-Collation conversion added with tests in `MapperUtilTest`                 |
-| P0: Transactional path                | RESOLVED | 11 dedicated tests + `AbstractTransactionalOperatorTest` base class              |
-| P0: `validateSession()` untested      | RESOLVED | 2 tests in `MongoChangeTemplateTest` for apply and rollback paths                |
-| P1: Options integration               | RESOLVED | 9 end-to-end tests: bypass validation, ordered, TTL, sparse, partial filter, collation |
-| P2: DDL operator gaps                 | RESOLVED | 8 tests: drop idempotency, createIndex idempotency/conflict, modifyCollection gaps |
+- **Null-valued options in YAML (Issue 3)**
+  `createIndex` with `options: {expireAfterSeconds: null}` should fail at load time with a validation error, not at execution time with an `IllegalArgumentException`.
+
+- **Collation sub-field type errors (Issue 2)**
+  `createIndex` with `options: {collation: {locale: "en", caseLevel: "yes"}}` should fail with a clear message (`ClassCastException` currently).
+
+- **`BsonConverter` for Float type**
+  Verify the `IllegalArgumentException("Unsupported BSON type: Float")` message is included in the test.
+
+- **`modifyCollection` no-op when all three optional params are null after pipeline deserialization edge case**
+  Confirm the validator rejects operations with empty/missing parameters before they reach the operator.
+
+- **`CreateViewOperator` idempotency — view already exists**
+  Already tested partially in `CreateViewOperatorTest`, but verify the skip log is emitted.
+
+- **`createCollection` with options (the feature-gap path)**
+  Verify that `createCollection` with non-empty parameters produces a validation error with a meaningful message (not just "does not accept parameters").
 
 ---
 
 ## 5. Robustness Checklist
 
-| Criterion                       |   Status    | Details                                                                                                                                                                                                                |
-|---------------------------------|:-----------:|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Null input handling             |    GOOD     | Validators catch null parameters at load time. `MongoOperation.validate()` handles null type, null collection, null parameters. Type checks prevent NPEs in getters                                                    |
-| Type safety                     |    GOOD     | Top-level parameters and nested elements are type-checked. Insert documents and createView pipeline stages are validated as Maps via `checkListElementTypes()`. Update `multi` is validated as Boolean. See section 5.1 (all resolved) |
-| Error collection (vs fail-fast) |    GOOD     | Individual validators collect all errors per operation. `MongoOperation.validate()` aggregates errors from `CollectionValidator` + `OperationValidator`. Framework collects across all payloads before any change runs |
-| Exception hierarchy             |    GOOD     | Uses the framework's `TemplatePayloadValidationError` with structured field/message pairs for validation. `MongoTemplateExecutionException` wraps driver exceptions with operation type and collection context           |
-| Logging                         |    GOOD     | `MongoOperator` base class logs transactional/non-transactional status for every operation. Clear INFO message when a non-transactional operation receives a session                                                   |
-| Immutability                    |    WEAK     | `MongoOperation` is fully mutable (public setters). No defensive copying of `parameters` map. Acceptable since instances are per-change and not shared                                                                 |
-| Thread safety                   |     N/A     | Template instances are per-execution, not shared. Static logger is safe                                                                                                                                                |
-| Idempotency                     |    GOOD     | All 4 DDL operations that failed on retry now check MongoDB state first and skip if the operation already completed. Uses `DatabaseInspector` helper. See section 5.2 (all resolved)                                    |
-| Backwards compatibility         |    GOOD     | `compileOnly` MongoDB driver 4.0.0 is a low bar. Index options correctly throw `UnsupportedOperationException` for removed options (`bucketSize`, `wildcardProjection`, `hidden`)                                      |
-| Resource cleanup                |     N/A     | No resources to clean up. Operators use driver-level collections which are managed by the MongoDB client                                                                                                               |
-
-### 5.1 Validation-to-Execution Gaps — ALL RESOLVED
-
-All 5 gaps identified below have been resolved. Validators now check nested element types and parameter value constraints, preventing `ClassCastException` at execution time.
-
-#### #1 — ~~Insert: document items not type-checked as Maps~~ RESOLVED
-**Severity: HIGH**
-**Original issue:** `InsertParametersValidator` checked that `documents` is a non-empty `List` and each item is non-null, but never checked `instanceof Map`. YAML like `documents: ["hello", 123]` passed validation and produced `ClassCastException` at execution.
-**Resolution:** Replaced the manual null-check loop with `OperationValidator.checkListElementTypes()`, which validates both null and non-Map elements. Each invalid item produces a clear error like `"Document at index 0 must be a document (key-value map)"`.
-
-#### #2 — ~~Update: `multi` parameter not type-checked~~ RESOLVED
-**Severity: HIGH**
-**Original issue:** `DeleteParametersValidator` validated `multi instanceof Boolean`, but `UpdateParametersValidator` did not. YAML like `multi: "yes"` passed validation and produced `ClassCastException` in `isMulti()`.
-**Resolution:** Added `instanceof Boolean` check for `multi` in `UpdateParametersValidator`, matching the existing pattern in `DeleteParametersValidator`. Invalid types produce `"'multi' must be a boolean"`.
-
-#### #3 — ~~CreateView: pipeline elements not type-checked as Maps~~ RESOLVED
-**Severity: MEDIUM**
-**Original issue:** `CreateViewParametersValidator` checked `pipeline instanceof List` but not that each stage is a `Map`. YAML like `pipeline: ["invalid"]` passed validation and produced `ClassCastException` at execution.
-**Resolution:** Added `OperationValidator.checkListElementTypes()` call after confirming pipeline is a List. Invalid stages produce `"Pipeline stage at index 0 must be a document (key-value map)"`.
-
-#### #4 — ~~CreateView: `viewOn` not validated for `$`/`\0`~~ RESOLVED
-**Severity: LOW**
-**Original issue:** `CollectionValidator` checked the `collection` field for `$` and `\0`, and `RenameCollectionParametersValidator` checked `target`, but `viewOn` bypassed these checks.
-**Resolution:** Restructured `viewOn` validation to check type (`instanceof String`), empty value, `$`, and `\0` characters — matching the pattern used by `RenameCollectionParametersValidator` for `target`.
-
-#### #5 — ~~DropIndex: silently ignores `keys` when both `indexName` and `keys` provided~~ RESOLVED
-**Severity: LOW**
-**Original issue:** When both were present, `DropIndexOperator` used `indexName` and silently discarded `keys`.
-**Resolution:** Added mutual exclusivity check in `DropIndexParametersValidator`. Providing both `indexName` and `keys` now produces `"DropIndex operation requires either 'indexName' or 'keys', not both"`.
-
-### 5.2 Idempotency Gaps — ALL RESOLVED
-
-All 4 DDL operations that failed on retry now implement pre-check idempotency via `DatabaseInspector`, a package-private utility class with static methods for inspecting MongoDB state. Each operator checks whether the operation already completed and skips with an INFO log if so. Genuine conflicts (e.g., both source and target exist for rename) are not masked — they still fail.
-
-| Operation          | Re-run scenario            | Current behavior                   | Idempotent? | Resolution                                                                                                                                                                                    |
-|--------------------|----------------------------|------------------------------------|:-----------:|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `createCollection` | Collection already exists  | Skips with INFO log                |   **Yes**   | **RESOLVED.** `DatabaseInspector.collectionExists()` check before `createCollection()`                                                                                                       |
-| `dropCollection`   | Collection doesn't exist   | Silent no-op                       |     Yes     | No action needed                                                                                                                                                                              |
-| `createIndex`      | Identical index exists     | Silent no-op                       |     Yes     | No action needed. Conflicting index (same field, different options) correctly throws — the user needs to know                                                                                 |
-| `dropIndex`        | Index doesn't exist        | Skips with INFO log                |   **Yes**   | **RESOLVED.** `DatabaseInspector.indexExistsByName()` / `indexExistsByKeys()` check before `dropIndex()`                                                                                     |
-| `createView`       | View already exists        | Skips with INFO log                |   **Yes**   | **RESOLVED.** `DatabaseInspector.collectionExists()` check (views appear in `listCollectionNames()`)                                                                                         |
-| `dropView`         | View doesn't exist         | Silent no-op                       |     Yes     | No action needed                                                                                                                                                                              |
-| `renameCollection` | Source gone, target exists | Skips with INFO log                |   **Yes**   | **RESOLVED.** Checks both source and target existence. `!sourceExists && targetExists` → skip (already renamed). All other error cases proceed normally and MongoDB handles the error         |
-| `insert`           | Duplicate `_id`            | `MongoBulkWriteException`          |     No      | Leave as-is. Partial inserts make idempotency complex. User is responsible for designing idempotent inserts via rollback pairs                                                                |
-| `update`           | No docs match filter       | 0 modified, no error               |     Yes     | No action needed                                                                                                                                                                              |
-| `delete`           | No docs match filter       | 0 deleted, no error                |     Yes     | No action needed                                                                                                                                                                              |
-| `modifyCollection` | Collection doesn't exist   | `MongoCommandException`            |     No      | Leave as-is. Modifying a non-existent collection is a genuine error                                                                                                                           |
-
-**Summary:** 9 of 11 operations are now idempotent. The remaining 2 (`insert`, `modifyCollection`) intentionally remain non-idempotent — their failure on retry is meaningful and should not be suppressed.
-
-### 5.3 Silent Validation Gaps — ALL RESOLVED
-
-All 3 gaps identified below have been resolved. Operations now reject unrecognized parameters and option keys at load time, and MongoDB driver exceptions are wrapped with template-level context.
-
-#### #1 — ~~`createCollection`, `dropCollection`, `dropView` accept unrecognized parameters silently~~ RESOLVED
-**Severity: MEDIUM**
-**Original issue:** These three operations used `OperationValidator.NO_OP`, so their `parameters` map was never inspected. YAML like `createCollection` with `parameters: { capped: true }` was silently ignored.
-**Resolution:** Replaced `OperationValidator.NO_OP` with `NoParametersValidator` for all three operations. Non-null, non-empty parameters now produce `"X operation does not accept parameters"`. Empty parameters (`{}`) and null are still accepted. The `NO_OP` constant was removed from `OperationValidator`.
-
-#### #2 — ~~Option mappers silently ignore unrecognized option keys~~ RESOLVED
-**Severity: MEDIUM**
-**Original issue:** All 5 option mappers only processed known keys and silently skipped everything else. YAML like `options: { banana: true }` was discarded without feedback.
-**Resolution:** Added `RECOGNIZED_KEYS` constant to all 5 option mappers (`IndexOptionsMapper`: 20 keys, `InsertOptionsMapper`: 2, `UpdateOptionsMapper`: 4, `CreateViewOptionsMapper`: 1, `RenameCollectionOptionsMapper`: 1). Added `checkUnrecognizedOptionKeys()` utility to `OperationValidator`. All 5 parameter validators that handle `options` now validate option keys when the options map is valid, producing errors like `"X operation does not recognize option 'key'"`.
-
-#### #3 — ~~No operator wraps MongoDB driver exceptions with context~~ RESOLVED
-**Severity: LOW**
-**Original issue:** Raw MongoDB driver exceptions bubbled up with no indication of which operation in a multi-step change failed.
-**Resolution:** `MongoOperator.apply()` now wraps `applyInternal()` exceptions in `MongoTemplateExecutionException`, which includes the operation type and collection name: `"Failed to execute '<type>' on collection '<collection>': <causeMessage>"`. Already-wrapped exceptions are re-thrown without double-wrapping. The original exception is preserved as the cause.
+| Criterion | Status | Details |
+|---|---|---|
+| Null input handling | GOOD | All validators handle null parameters/collections. `MongoOperation` helpers rely on validators having run first (documented). `DeleteParametersValidator` uses null-safe `params == null ? null :` pattern. |
+| Type safety | PARTIAL | Validators enforce types for all primary parameters. Option maps: types checked via `MapperUtil.get*()` helpers for top-level keys, but collation sub-fields use raw casts (Issue 2). |
+| Error collection vs fail-fast | GOOD | `MongoOperation.validate()` collects all errors before returning. TypeValidator is fail-fast (returns early on invalid type, no point validating further). Pattern is correct. |
+| Exception hierarchy | GOOD | `MongoTemplateExecutionException` wraps driver exceptions with context. `IllegalArgumentException` for validation failures in mappers. Clean hierarchy. |
+| Logging | GOOD | `MongoOperator.logOperation()` logs transactional mode + session mismatches. Operation operators log idempotency skips at INFO. Logger name "MongoTemplate" is consistent. |
+| Immutability | PARTIAL | `MongoOperation` is mutable (setters required for YAML deserialization). Validator instances are `static final`. Option sets are `Collections.unmodifiableSet()`. Operators are effectively immutable after construction. |
+| Thread safety | GOOD | No shared mutable state between operations. Validator singletons are stateless. Each step gets a new `MongoOperator` instance. |
+| Idempotency | PARTIAL | `createCollection`, `createView`, `createIndex` (via MongoDB), `dropIndex`, and `renameCollection` have idempotency guards. `dropCollection` and `dropView` are implicitly idempotent (MongoDB `drop()` is no-op on non-existent). `insert`, `update`, `delete` are **not idempotent by design**. |
+| Backwards compatibility | NOT HANDLED | No versioning of the YAML schema. Removing a supported field or operation would be a breaking change with no migration path. Acceptable for current stage. |
+| Resource cleanup | N/A | Template borrows `MongoDatabase` from the application context; no lifecycle management needed. No connections or cursors owned by the template. |
 
 ---
 
 ## 6. Security and Safety Assessment
 
-> **Context:** Flamingock templates are authored by **developers**, not end users. YAML change files are committed to version control alongside application code and reviewed through the same PR process. This makes injection-style attacks (analogous to SQL injection) not applicable — the template author controls all inputs. The checks below exist as **developer guardrails** (catching mistakes), not as a security boundary against untrusted input.
-
-### 6.1 Collection Name Validation
-**Status: GOOD**
-`CollectionValidator` checks for `$` and `\0` in collection names, preventing accidental use of MongoDB operator prefixes (e.g., `$cmd`) and null-byte issues. The `target` parameter in `renameCollection` is also validated for `$` and `\0` characters via `RenameCollectionParametersValidator`. Collection name length and `system.` prefix are not validated — these are MongoDB server-enforced constraints that produce clear error messages.
-
-### 6.2 Arbitrary Command Execution
-**Status: LOW RISK**
-`ModifyCollectionOperator` uses `mongoDatabase.runCommand()`, which is the most powerful MongoDB operation. However, the command is built programmatically with `collMod` prefix, so it cannot be repurposed for arbitrary commands. The `validator`, `validationLevel`, and `validationAction` values are validated at load time by `ModifyCollectionParametersValidator`.
-
-### 6.3 Data Destruction Safety
-**Status: ACCEPTABLE**
-- `delete` with `filter: {}` deletes ALL documents (by design, documented)
-- `dropCollection` is irreversible
-- No confirmation or dry-run mode exists
-- Rollback provides the safety net, and rollback payloads are validated at load time just like apply payloads
-
-### 6.4 YAML Deserialization
-**Status: DELEGATED**
-The module does not handle YAML parsing — it receives already-deserialized `MongoOperation` POJOs from the Flamingock framework. YAML deserialization safety is the framework's responsibility.
+| Area | Status | Details |
+|---|---|---|
+| Name/key injection (collection names, index names, viewOn) | PARTIALLY MITIGATED | `$` and `\0` are validated. MongoDB enforces further restrictions at the driver level. In Flamingock's threat model (developer-authored YAML, not user-submitted input), full injection protection is less critical. The MongoDB driver parameterizes collection names natively, so command injection via collection name is blocked by the driver. |
+| Arbitrary command execution | LOW RISK | `modifyCollection` builds a raw `collMod` MongoDB command from user-supplied YAML fields. This is developer-written YAML, not user input. The command fields (`validator`, `validationLevel`, `validationAction`) are constrained by validator logic. |
+| Data destruction safety | ACCEPTABLE | `dropCollection`, `dropView` are data-destructive with no confirmation mechanism. This is by design — Flamingock changes are audited, irreversible changes should use the rollback step to recreate. No additional guard is needed. |
+| Input deserialization safety | DELEGATED | YAML → Java types is handled by the Flamingock framework's Jackson-based deserialization, not by this module. `BsonConverter` handles Map/List/primitive conversion safely with explicit type checks and `IllegalArgumentException` on unsupported types. |
 
 ---
 
-## 7. PR-Ready Concrete Changes — ALL COMPLETED
+## 7. Design & Engineering Principles Evaluation
 
-All 7 changes from the original analysis have been implemented across multiple PRs:
+### 7.1 Right Level of Engineering
 
-1. **Rollback validation** — Moved to framework-level `TemplatePayload.validate()` (PR #8, #11)
-2. **InsertOperator silent guard** — Removed (PR #11)
-3. **CreateIndexOperator transactional flag** — Corrected to `false`, warning removed (PR #10)
-4. **modifyCollection validation** — `ModifyCollectionParametersValidator` added (PR #8)
-5. **RenameCollection target validation** — `$` and `\0` checks added to `RenameCollectionParametersValidator`
-6. **Collation YAML mapping** — Map-to-Collation conversion added to `MapperUtil` (PR #8)
-7. **Duplicate logger removal** — Removed from `CreateCollectionOperator` (PR #11)
+**Not overengineered: WELL APPLIED**
+No unnecessary abstractions. `DatabaseInspector` is a package-private utility rather than an over-engineered interface. `MapperUtil` is a final utility class. `OperationValidator` is a functional interface (single method). No excessive configurability. The enum factory pattern in `MongoOperationType` is pragmatic — it co-locates operation name, operator factory, validator, and transactional flag in one place.
+
+**Not underengineered: WELL APPLIED**
+The separation of validators, mappers, and operators is appropriate for the complexity of 11 distinct operations. Each validator has its own class rather than a monolithic switch. `MongoOperator`'s template method pattern eliminates duplication in exception handling and logging across 11 implementations.
+
+**Balance verdict: WELL APPLIED**
+The complexity is proportional to the problem. 11 operations × (validator + mapper + operator + test) is verbose but justified — each operation has meaningfully different validation and execution logic. No layer adds overhead without value.
+
+### 7.2 SOLID Principles
+
+**Single Responsibility: WELL APPLIED**
+Each class has one clear reason to change. `MongoOperation` owns deserialization and validation dispatch. `MongoOperationType` owns factory and enum-to-type mapping. Operators own execution. Validators own structural correctness. Mappers own type conversion.
+
+**Open/Closed: ADEQUATE**
+Adding a new operation requires: (1) new enum value in `MongoOperationType`, (2) new `MongoOperator` subclass, (3) new `OperationValidator` implementation. Existing classes do not need modification. The pattern works well, though the enum in `MongoOperationType` technically requires editing to add new entries — a registry-based pattern would be more OCP-pure but is overkill for the current scale.
+
+**Liskov Substitution: WELL APPLIED**
+All `MongoOperator` subclasses honor the contract: `applyInternal()` either executes the operation or throws `MongoTemplateExecutionException` (the base `apply()` wraps non-template exceptions). The idempotency guard (return-early pattern) is consistent across operators that use it.
+
+**Interface Segregation: WELL APPLIED**
+`OperationValidator` is a single-method functional interface. Clients depend only on `validate(MongoOperation)`. Static helpers are additive utilities on the interface, not forced dependencies.
+
+**Dependency Inversion: ADEQUATE**
+Operators depend on `MongoDatabase` (MongoDB driver concrete type). This is appropriate — the module's purpose *is* to execute MongoDB operations. No abstraction layer over the driver is warranted. The driver is injected via constructor (not instantiated inside operators).
+
+### 7.3 Design Patterns
+
+**Factory (MongoOperationType): WELL APPLIED**
+The `BiFunction<MongoDatabase, MongoOperation, MongoOperator>` stored in each enum value is an elegant factory pattern. It avoids a traditional factory class and keeps all operation metadata together.
+
+**Template Method (MongoOperator): WELL APPLIED**
+`apply()` → `applyInternal()` correctly separates cross-cutting concerns (logging, exception wrapping) from operation-specific execution. All 11 operators benefit without code duplication.
+
+**Strategy (OperationValidator): WELL APPLIED**
+Each operation type holds its validator as a strategy. The validator is selected by `MongoOperationType` and never hardcoded in the operator. Consistent with the factory pattern.
+
+**Missing — Registry for type lookup (MongoOperationType): NEEDS IMPROVEMENT**
+`findByTypeOrThrow()` scans all enum values with `Arrays.stream()` on every call. A static `Map<String, MongoOperationType>` lookup table would be the standard pattern for this use case and makes the intent clearer. Minor concern.
+
+### 7.4 API Design (Template Consumer Experience)
+
+**YAML schema: ADEQUATE**
+The schema is intuitive: `type`, `collection`, `parameters` with operation-specific keys. Error messages name the exact field path (`parameters.documents`, `parameters.options.unknownKey`) and explain the constraint clearly.
+
+**Error messages: GOOD**
+Validation errors include entity path and human-readable explanation. `"Insert operation requires 'documents' parameter"` is clear. `"Insert operation does not recognize option 'xyz'"` is actionable.
+
+**Principle of least surprise: ADEQUATE**
+`createCollection` and `createIndex` are idempotent (skip if exists/already exists). `dropCollection`, `dropView`, `dropIndex` are idempotent at the MongoDB driver level. `renameCollection` handles the "already renamed" case explicitly. `update` and `delete` default to single-document (no `multi: true`) which is the safe default. `insert` with a single document routes to `insertOne` automatically.
+
+**Defaults: GOOD**
+`multi: false` for update/delete is the safe default. No `transactional` default forces the user to be explicit.
+
+### 7.5 Consistency
+
+**WELL APPLIED overall, with minor inconsistencies:**
+- Idempotency pattern is consistent for `createCollection`, `createView`, `renameCollection`, `dropIndex`. `dropCollection` and `dropView` are implicitly idempotent via MongoDB behavior (no guard needed).
+- All 11 operators follow the same `applyInternal(ClientSession)` signature.
+- All validators follow the same `List<TemplatePayloadValidationError> validate(MongoOperation)` signature.
+- **Inconsistency:** `DeleteParametersValidator` uses inline null-safety `params == null ? null :` (line 37) while `InsertParametersValidator` returns early on null parameters. Minor but inconsistent.
+- **Inconsistency:** `CreateIndexOperator` does not have an idempotency existence check while `CreateCollectionOperator` does. MongoDB handles the idempotent case natively for identical index definitions, but the inconsistency in approach may confuse future contributors.
+
+### 7.6 Defensive Programming vs Trust Boundaries
+
+**ADEQUATE**
+Validation runs at the correct boundary: load time via `MongoOperation.validate()`. Operators trust that validation has run and do not re-validate. `MongoOperator` documents the precondition via Javadoc in `MongoChangeTemplate`. The `validateSession()` call in `MongoChangeTemplate` is the correct enforcement point for the transactional session contract.
+
+**Gap:** The helper methods on `MongoOperation` (`getKeys()`, `getFilter()`, `getOptions()`) have implicit preconditions (validator ran) but no explicit assertion to make violations detectable (see Issue 5).
 
 ---
 
-## 8. Template Feature Gaps
+## 8. PR-Ready Concrete Changes
 
-The following are gaps at the **feature/template level** — not code quality issues, but limitations in what the template offers to users authoring YAML changes.
+### Fix Issue 1 — Remove unsupported keys from validation or explicitly reject them
 
-### #1 — `delete` operation has no `options` support
-**Severity: MEDIUM**
-`insert` and `update` both support an `options` parameter (collation, bypass validation, etc.), but `delete` does not. A user has no way to specify collation for delete operations. This is an inconsistency in the template's API surface — all three DML operations should offer the same options capabilities.
+**`CreateIndexParametersValidator.java:66-75`**
+After the `options instanceof Map` check, add:
+```java
+Set<String> unsupportedKeys = new HashSet<>(Arrays.asList("bucketSize", "wildcardProjection", "hidden"));
+for (String unsupported : unsupportedKeys) {
+    if (optionsMap.containsKey(unsupported)) {
+        errors.add(new TemplatePayloadValidationError(
+            "parameters.options." + unsupported,
+            "'" + unsupported + "' is not supported — removed in MongoDB driver 4.1.0+"));
+    }
+}
+```
+Remove `bucketSize`, `wildcardProjection`, and `hidden` from `IndexOptionsMapper.RECOGNIZED_KEYS`.
+Remove the `UnsupportedOperationException` throws in `IndexOptionsMapper.java:94-110` (now unreachable).
 
-### #2 — `createCollection` accepts zero parameters
-**Severity: MEDIUM**
-Users cannot create capped collections (`capped`, `size`, `max`), timeseries collections, or set collection-level collation. These are common setup patterns that force fallback to programmatic changes, undermining the "no-code" premise of the template.
+### Fix Issue 2 — Replace raw casts in `buildCollationFromMap()`
 
-### #3 — Missing `replaceOne` operation
-**Severity: MEDIUM**
-`update` modifies fields via operators (`$set`, `$unset`, etc.), but `replaceOne` replaces an entire document. These are semantically different MongoDB operations. A user who needs to replace a full document cannot express that in YAML.
+**`MapperUtil.java:107-130`**
+Replace raw casts with type-checked helpers:
+```java
+if (map.containsKey("caseLevel")) {
+    builder.caseLevel(getBoolean(map, "caseLevel"));    // was: (Boolean) map.get(...)
+}
+if (map.containsKey("caseFirst")) {
+    builder.collationCaseFirst(CollationCaseFirst.fromString(getString(map, "caseFirst")));
+}
+// ... same for strength, alternate, maxVariable, normalization, backwards
+```
+Note: `strength` needs `getInteger(map, "strength")` to feed into `CollationStrength.fromInt()`.
 
-### #4 — `modifyCollection` only exposes 3 of many `collMod` options
-**Severity: LOW**
-Only `validator`, `validationLevel`, and `validationAction` are supported. Missing `expireAfterSeconds` (TTL modification), `changeStreamPreAndPostImages`, and others. This limits what collection modifications users can declare without falling back to programmatic changes.
+### Fix Issue 6 — Handle missing-source-and-target in `RenameCollectionOperator`
 
-### #5 — `dropView` has no safety check against dropping real collections
-**Severity: LOW**
-`dropView` presumably calls `collection.drop()` with no verification that the target is actually a view. A user who accidentally provides a real collection name would silently destroy data. A pre-execution check against `listCollections` metadata could guard against this.
+**`RenameCollectionOperator.java:37-44`**
+Add a case before the rename call:
+```java
+if (!sourceExists && !targetExists) {
+    logger.warn("Neither source '{}' nor target '{}' exists, skipping renameCollection",
+        op.getCollection(), targetName);
+    return;
+}
+```
+
+### Fix Issue 7 — Eliminate null return from `CreateViewOperator.getPipeline()`
+
+**`CreateViewOperator.java:50-55`**
+Change:
+```java
+return rawPipeline != null ? rawPipeline.stream().map(Document::new).collect(Collectors.toList()) : null;
+```
+To:
+```java
+if (rawPipeline == null) {
+    throw new IllegalStateException("pipeline is null — validate() guarantees it is non-null");
+}
+return rawPipeline.stream().map(Document::new).collect(Collectors.toList());
+```
+
+### Fix Issue 8 — Log deprecation warning for `background` option
+
+**`IndexOptionsMapper.java:52-54`**
+After setting `background`:
+```java
+if (options.containsKey("background")) {
+    indexOptions.background(getBoolean(options, "background"));
+    // Add:
+    logger.warn("'background' index option is deprecated since MongoDB 4.2 and has no effect in 5.0+");
+}
+```
+
+### Fix Issue 9 — Static lookup map in `MongoOperationType`
+
+**`MongoOperationType.java:75-86`**
+Add a static initializer:
+```java
+private static final Map<String, MongoOperationType> LOOKUP;
+static {
+    LOOKUP = new HashMap<>();
+    for (MongoOperationType t : values()) {
+        LOOKUP.put(t.value, t);
+    }
+}
+
+public static MongoOperationType findByTypeOrThrow(String typeValue) {
+    MongoOperationType t = LOOKUP.get(typeValue);
+    if (t == null) throw new IllegalArgumentException("MongoOperation not supported: " + typeValue);
+    return t;
+}
+
+public static Optional<MongoOperationType> findByType(String typeValue) {
+    return Optional.ofNullable(LOOKUP.get(typeValue));
+}
+```
 
 ---
 
 ## 9. Code Quality Observations
 
 ### Positive
-- Clean separation of concerns: template / model / validation / operators / mappers
-- Enum-based factory pattern in `MongoOperationType` is elegant and extensible
-- Validation architecture cleanly leverages the `TemplatePayload` contract for early error detection
-- Individual per-operation validators follow a consistent pattern and collect all errors
-- Template method pattern in `MongoOperator` with `apply()` / `applyInternal()` is well-designed
-- Good use of `@NonLockGuarded` on `MongoOperation` model
-- Comprehensive Javadoc on `MongoChangeTemplate`
-- Test YAML files serve as excellent documentation of the YAML schema
-- Unrecognized parameter key detection catches typos at load time
+
+- **Validation-first design is well-executed.** `MongoOperation.validate()` implements the `TemplatePayload` contract correctly: it collects all errors (not fail-fast), runs type validation first (aborting early on unknown type since all subsequent validators depend on it), then runs the collection and operation validators.
+
+- **`MongoOperationType` enum as registry is elegant.** Placing the operator factory (`BiFunction`), the validator instance, the type name, and the transactional flag in one enum constant means adding a new operation is a single, local change. No separate registry or DI configuration needed.
+
+- **`DatabaseInspector` encapsulates MongoDB namespace queries cleanly.** Package-private, stateless, two focused methods. Zero abstraction overhead.
+
+- **`BsonConverter` handles the full YAML → BSON type mapping with recursive support.** Clean and correct for all YAML-representable types. The `IllegalArgumentException` for unsupported types (`Float`, arbitrary objects) is appropriate.
+
+- **`MapperUtil` type-safe getter pattern is good.** `instanceof` checks with meaningful error messages is far superior to raw casts in mapper code.
+
+- **Exception context in `MongoTemplateExecutionException` is well-designed.** Every execution failure includes `type` and `collection` context, making log output actionable without needing a stack trace.
+
+- **`MongoOperator.logOperation()` has excellent operational visibility.** The four branches (transactional+session, transactional+no-session, non-transactional+session, non-transactional+no-session) cover every combination with appropriate log levels (DEBUG/WARN/INFO).
+
+- **Validation test coverage in `MongoOperationValidateTest` is thorough.** Every validator has dedicated test cases including null, empty, wrong type, unrecognized keys, and edge cases.
 
 ### Negative
-- ~~Heavy code duplication in `InsertOperator` and `UpdateOperator`~~ RESOLVED — Flattened nested if/else to single chain; extracted options to local variable to avoid duplicate mapper calls
-- ~~`MongoOperation` is a god object~~ REDUCED — Moved 9 single-use getters to their respective operator classes as private methods. `MongoOperation` retains 4 shared getters (`getOptions`, `getFilter`, `isMulti`, `getKeys`) used by multiple operators
-- No builder pattern or factory for `MongoOperation` in tests — all tests manually construct via setters
-- ~~`MapperUtil` mixes concerns: type extraction + BSON conversion + Collation building~~ RESOLVED — Split into `MapperUtil` (parameter extraction + collation) and `BsonConverter` (BSON serialization)
-- ~~Test infrastructure duplication~~ RESOLVED — Extracted `AbstractMongoOperatorTest` base class with shared MongoDBContainer setup; 12 test classes now extend it
+
+- **`IndexOptionsMapper` has dead code in the validation flow.** Three `UnsupportedOperationException` throws exist for keys that pass validation (Issue 1). The validator and mapper are out of sync.
+
+- **`buildCollationFromMap()` does not use the established `MapperUtil` pattern.** The rest of the mapper layer uses `getBoolean(map, key)` for type-safe extraction; `buildCollationFromMap()` uses raw casts. This inconsistency is the source of Issue 2.
+
+- **`DeleteParametersValidator` and `InsertParametersValidator` handle null `params` differently.** One uses early return, the other uses inline null-safe access. Small but breaks the consistency of the validator layer.
+
+- **`MongoOperation` helpers (`getKeys`, `getFilter`, `getOptions`) mix their concern with the model class.** These are convenience methods for operators, but they contain operator-specific casting logic (`new Document((Map) parameters.get("keys"))`). Moving them to `BsonConverter` or as static helpers in `MongoOperator` would make `MongoOperation` a purer POJO.
+
+- **`CreateIndexOperator` does not follow the idempotency guard pattern used by `CreateCollectionOperator` and `CreateViewOperator`.** MongoDB handles the duplicate-name-with-same-spec case silently, but a user who runs with `unique: true` and an existing non-unique index name gets a confusing MongoDB error rather than a clear idempotency message. Documenting why no guard is needed (MongoDB handles it) would help.
 
 ---
 
 ## 10. Final Score
 
-| Category                       |  Weight  | Score (1-10) |   Weighted   |
-|--------------------------------|:--------:|:------------:|:------------:|
-| Architecture & Design          |   15%    |      9       |     1.35     |
-| Implementation Correctness     |   15%    |      9       |     1.35     |
-| Validation & Error Handling    |   20%    |      8       |     1.60     |
-| Template Feature Completeness  |   15%    |      6       |     0.90     |
-| Test Coverage                  |   20%    |      8       |     1.60     |
-| Security & Safety              |   10%    |      8       |     0.80     |
-| Code Quality & Maintainability |    5%    |      8       |     0.40     |
-| **Total**                      | **100%** |              | **8.00 / 10** |
+| Category | Weight | Score (1-10) | Weighted |
+|---|:---:|:---:|:---:|
+| Architecture & Design | 15% | 9 | 1.35 |
+| Design Principles & Right Level of Engineering | 15% | 8 | 1.20 |
+| Implementation Correctness | 20% | 7 | 1.40 |
+| Validation & Error Handling | 15% | 7 | 1.05 |
+| Test Coverage | 15% | 8 | 1.20 |
+| API Design & Consumer Experience | 10% | 8 | 0.80 |
+| Security & Safety | 5% | 7 | 0.35 |
+| Code Quality & Maintainability | 5% | 8 | 0.40 |
+| **Total** | **100%** | | **7.75 / 10** |
 
-### Score Justification
+### Score justification
 
-**Architecture (9/10):** Solid layered design with clean separation of concerns. The validation architecture was significantly improved by leveraging the framework's `TemplatePayload` contract — load-time validation is now built into the data model rather than being a separate step. Enum factory with validator binding is elegant. Template method pattern in operators is well-designed.
+**Architecture & Design (9/10):** The separation of validators, mappers, and operators is clean and well-proportioned. The enum factory pattern, template method in `MongoOperator`, and load-time validation via `TemplatePayload` are all well-executed architectural decisions. The 0.5-point deduction is for the static lookup gap and the minor inconsistency in idempotency patterns.
 
-**Implementation Correctness (9/10):** All 10 original correctness issues have been resolved. Rollback validation is now handled by the framework. All operators have correct transactional flags. Collation mapping works for YAML input. Delete supports `deleteOne`/`deleteMany`. MongoDB driver exceptions are now wrapped with template-level context (`MongoTemplateExecutionException`) for easier debugging of multi-step changes. All 4 DDL operations that previously failed on retry (`createCollection`, `dropIndex`, `createView`, `renameCollection`) now implement idempotent pre-checks via `DatabaseInspector` — 9 of 11 operations are now retry-safe (section 5.2). The remaining deduction is for `insert` not being idempotent (by design) and edge cases in option value type checking at the mapper level.
+**Design Principles & Right Level of Engineering (8/10):** SOLID is largely well applied. Code is not over- or under-engineered for the problem. One point deducted for the `buildCollationFromMap()` deviation from the established `MapperUtil` pattern, and for `MongoOperation` mixing POJO responsibility with operator-specific casting.
 
-**Validation (8/10):** Comprehensive load-time validation architecture with 8 dedicated parameter validators + `NoParametersValidator` + `CollectionValidator`. Top-level types are checked, unrecognized parameter keys are rejected, nested element types are validated (insert documents, createView pipeline stages checked as Maps; update `multi` checked as Boolean), and multiple errors are collected. All 5 validation-to-execution gaps (section 5.1) and all 3 silent validation gaps (section 5.3) have been resolved. `NoParametersValidator` now catches unexpected parameters on `createCollection`/`dropCollection`/`dropView`. Unrecognized option keys inside `options` are detected via `checkUnrecognizedOptionKeys` with `RECOGNIZED_KEYS` sets in all 5 mappers. The remaining deduction is for edge cases in option value validation (e.g., `unique: "yes"` instead of `true` is not caught at load time — only at mapper invocation).
+**Implementation Correctness (7/10):** The three high/medium issues (validation-mapper gap for unsupported index options, raw casts in collation building, null option values passing validation) are genuine correctness gaps. The validation-mapper gap is particularly bad because it defeats the purpose of load-time validation. One LOW correctness gap in `RenameCollectionOperator`. Core operations (insert, update, delete) are correct.
 
-**Template Feature Completeness (6/10):** The template covers 11 MongoDB operations, which handles the most common change scenarios. However, feature gaps reduce the "no-code" value proposition: `delete` lacks `options` support (inconsistent with insert/update), `createCollection` accepts zero parameters (no capped/timeseries collections), `replaceOne` is missing entirely (semantically different from `update`), `modifyCollection` only exposes 3 of many `collMod` options, and `dropView` has no safety check against accidentally dropping real collections. See section 8 for details.
+**Validation & Error Handling (7/10):** The two-phase validation design is correct and the validator chain is well-structured. Three points deducted: unsupported index options pass validation (Issue 1), null option values are not caught (Issue 3), and collation sub-fields have no validation (Issue 2). The framework of validators is sound; these are gaps in what they check.
 
-**Test Coverage (8/10):** Comprehensive across all layers. 94 validation tests cover all 11 operations with type checks, missing parameters, unrecognized parameter keys, unrecognized option keys, no-parameter enforcement, nested element type checks, and error accumulation. 82 mapper unit tests cover all option conversions including collation. 5 exception wrapping tests verify `MongoTemplateExecutionException` behavior. 11 transactional path tests across 3 dedicated test classes exercise `ClientSession` commit, abort, and session-with-options branches for all 3 transactional operators. 9 options integration tests verify end-to-end behavior of `bypassDocumentValidation`, `ordered`, `expireAfterSeconds`, `sparse`, `partialFilterExpression`, and `collation`. 2 `validateSession()` tests confirm `IllegalArgumentException` for transactional changes with null session. DDL gap tests cover idempotency for dropCollection, dropView, createIndex, and modifyCollection (enforcement, metadata assertions, partial parameters, re-application). ~265 total tests. The remaining deduction is for missing end-to-end tests for `arrayFilters`, `collation` on createIndex, and full Flamingock pipeline tests with transactional changes.
+**Test Coverage (8/10):** Strong integration tests (one per operation), comprehensive validation unit tests, all transactional paths have dedicated test classes. Two points deducted for specific missing P0 tests: no test for the validation-mapper gap (Issue 1 would be caught by a test that asserts a validation error for `bucketSize`), and no rollback data-reversal verification.
 
-**Security (8/10):** Developer-authored context makes injection-style concerns not applicable. Collection name `$`/`\0` checks serve as guardrails, now applied to both `collection` and `target` parameters. `modifyCollection` parameters are validated against known values. YAML deserialization is delegated to the framework.
+**API Design & Consumer Experience (8/10):** Error messages are clear and specific. YAML schema is intuitive. Idempotency behavior is predictable for DDL operations. One point deducted for the misleading `bucketSize`/`wildcardProjection`/`hidden` accept-then-fail behavior. One point deducted for the lack of guidance when users want `createCollection` with options.
 
-**Code Quality (8/10):** Clean code style, good naming, proper license headers. Four of five code quality negatives have been addressed: operator duplication flattened, `MongoOperation` god-object reduced (9 getters moved to operators), `MapperUtil` split into extraction + BSON conversion, and test boilerplate extracted to `AbstractMongoOperatorTest`. Remaining deduction: no builder/factory for `MongoOperation` in tests, and `MongoOperation` still has 4 shared getters.
+**Security & Safety (7/10):** In the Flamingock threat model (developer-authored YAML, not user input), the security posture is reasonable. Partial collection name validation and the raw MongoDB `collMod` command are acceptable trade-offs. Three points deducted for incomplete namespace validation and lack of explicit injection documentation.
 
-### Bottom Line
+**Code Quality & Maintainability (8/10):** Generally clean, well-named, well-commented. The license header setup and `spotlessApply` tooling ensures consistency. Deducted for the inconsistent null-params handling between validators and for the raw casts in `buildCollationFromMap()` not following the established pattern.
 
-The module has a **solid architecture and clean codebase**, with comprehensive validation, error handling, retry safety, and test coverage. All 10 original correctness issues, all 5 validation-to-execution gaps, all 3 silent validation gaps, all 4 idempotency gaps, and all test coverage gaps (transactional path, options integration, DDL operator gaps) have been resolved. MongoDB driver exceptions are now wrapped with template-level context for easier debugging. 9 of 11 operations are now idempotent — multi-step changes with non-transactional DDL operations are retry-safe. Test coverage spans 265 tests including transactional path verification, end-to-end options integration, and DDL idempotency. The remaining area for improvement is **feature gaps** — missing `replaceOne`, inconsistent options support, bare-bones `createCollection` (section 8). The module is **production-ready for simple and moderately complex changes** with robust multi-step retry behavior.
+### Bottom line
 
----
-
-## 11. Future Roadmap
-
-### Automatic Rollback Generation (v1.2+)
-
-**Concept:** Rollback payloads remain mandatory by default. For operations with deterministic, safe inverses, the template auto-generates the rollback when the user omits it. For all other operations, the user must provide explicit rollback YAML — otherwise validation fails at load time. Documentation clearly states which operations support auto-rollback.
-
-**Phase 1 — Deterministic inverses (no state required):**
-
-| Apply | Auto-generated rollback |
-|---|---|
-| `createCollection` | `dropCollection` |
-| `createIndex` | `dropIndex` (same keys/name) |
-| `createView` | `dropView` |
-| `renameCollection` | `renameCollection` (swap source/target) |
-
-These 4 operations have clean inverses — the apply YAML contains everything needed to construct the rollback. No runtime state required.
-
-**Phase 2 — State-aware inverses (requires framework support):**
-
-Once the framework supports passing state between apply and rollback (or inter-execution context), additional operations become candidates:
-
-- `insert` with explicit `_id` values → `delete` with `{_id: {$in: [...]}}`
-- `modifyCollection` → restore previous validation settings (captured before apply)
-- `dropIndex` by keys → `createIndex` with original keys + options (captured before drop)
-
-**Operations that remain manual-rollback-only:**
-
-- `update` — requires capturing previous document state
-- `delete` — requires capturing deleted documents
-- `dropCollection` — data loss is irreversible
-- `dropView` — requires capturing the original pipeline definition
-
-**Design principles:**
-- Safe by default: rollback is mandatory unless the operation is proven auto-rollbackable
-- Best-effort expansion: each phase adds more auto-rollback support, but only for operations that are fully safe
-- User override: even for auto-rollback operations, explicit rollback YAML takes precedence
+The module is **close to production-ready**. The architecture is sound, the validation-first design is correctly implemented, and the test coverage is strong. The three blocking issues before GA are: (1) the validation-mapper gap for unsupported index options (Issue 1) — users will be misled by passing validation then failing at runtime; (2) collation sub-field type errors producing `ClassCastException` instead of structured errors (Issue 2); (3) null-valued YAML option keys bypassing load-time validation (Issue 3). Fixing these three would raise the implementation correctness and validation scores to 9/10 and lift the total to ~8.3/10. The codebase has a strong foundation and is well-structured for continued development.

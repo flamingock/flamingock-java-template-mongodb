@@ -1692,4 +1692,137 @@ class MongoOperationValidateTest {
             assertEquals(2, errors.size());
         }
     }
+
+    @Nested
+    @DisplayName("Unsupported Index Option Tests")
+    class UnsupportedIndexOptionTests {
+
+        @ParameterizedTest
+        @ValueSource(strings = {"bucketSize", "wildcardProjection", "hidden"})
+        @DisplayName("WHEN createIndex uses removed driver option THEN validation fails at load time")
+        void unsupportedIndexOptionProducesValidationErrorTest(String unsupportedOption) {
+            MongoOperation op = new MongoOperation();
+            op.setType("createIndex");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            Map<String, Object> keys = new HashMap<>();
+            keys.put("field", 1);
+            params.put("keys", keys);
+            Map<String, Object> options = new HashMap<>();
+            options.put(unsupportedOption, "value");
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options." + unsupportedOption, errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("not supported"));
+        }
+    }
+
+    @Nested
+    @DisplayName("Null Option Value Tests")
+    class NullOptionValueTests {
+
+        @Test
+        @DisplayName("WHEN createIndex option value is null THEN validation fails at load time")
+        void createIndexNullOptionValueTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createIndex");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            Map<String, Object> keys = new HashMap<>();
+            keys.put("field", 1);
+            params.put("keys", keys);
+            Map<String, Object> options = new HashMap<>();
+            options.put("expireAfterSeconds", null);
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options.expireAfterSeconds", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("cannot be null"));
+        }
+
+        @Test
+        @DisplayName("WHEN insert option value is null THEN validation fails at load time")
+        void insertNullOptionValueTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("insert");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            List<Map<String, Object>> docs = new ArrayList<>();
+            Map<String, Object> doc = new HashMap<>();
+            doc.put("name", "Test");
+            docs.add(doc);
+            params.put("documents", docs);
+            Map<String, Object> options = new HashMap<>();
+            options.put("bypassDocumentValidation", null);
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options.bypassDocumentValidation", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("cannot be null"));
+        }
+
+        @Test
+        @DisplayName("WHEN update option value is null THEN validation fails at load time")
+        void updateNullOptionValueTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("update");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("filter", new HashMap<>());
+            Map<String, Object> update = new HashMap<>();
+            update.put("$set", new HashMap<>());
+            params.put("update", update);
+            Map<String, Object> options = new HashMap<>();
+            options.put("upsert", null);
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options.upsert", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("cannot be null"));
+        }
+    }
+
+    @Nested
+    @DisplayName("Collection Name System Prefix Tests")
+    class CollectionNameSystemPrefixTests {
+
+        @Test
+        @DisplayName("WHEN collection starts with system. THEN validation fails")
+        void collectionWithSystemPrefixTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createCollection");
+            op.setCollection("system.users");
+
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
+
+            assertEquals(1, errors.size());
+            assertEquals("collection", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("cannot start with 'system.'"));
+        }
+
+        @Test
+        @DisplayName("WHEN collection contains system as non-prefix THEN validation passes")
+        void collectionWithSystemInMiddlePassesTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createCollection");
+            op.setCollection("mysystem.users");
+
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
+
+            assertTrue(errors.isEmpty());
+        }
+    }
 }

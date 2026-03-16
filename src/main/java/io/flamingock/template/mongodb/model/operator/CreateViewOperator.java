@@ -48,9 +48,12 @@ public class CreateViewOperator extends MongoOperator {
 
     @SuppressWarnings("unchecked")
     private List<Document> getPipeline() {
-        List<Map<String, Object>> rawPipeline = (List<Map<String, Object>>) op.getParameters().get("pipeline");
-        return rawPipeline != null
-                ? rawPipeline.stream().map(Document::new).collect(Collectors.toList())
-                : null;
+        Object value = op.getParameters().get("pipeline");
+        if (!(value instanceof List)) {
+            throw new IllegalStateException(
+                    "getPipeline() called but 'pipeline' is not a List — validate() must run before operator execution");
+        }
+        List<Map<String, Object>> rawPipeline = (List<Map<String, Object>>) value;
+        return rawPipeline.stream().map(Document::new).collect(Collectors.toList());
     }
 }

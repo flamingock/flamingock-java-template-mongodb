@@ -43,7 +43,8 @@ public class NoParametersValidator implements OperationValidator {
         }
         List<TemplatePayloadValidationError> errors = new ArrayList<>();
         errors.add(new TemplatePayloadValidationError("parameters",
-                operationName + " operation does not accept parameters"));
+                operationName + " operation does not accept parameters. "
+                        + "Use a programmatic Change if you need to pass options to this operation."));
         return errors;
     }
 }
