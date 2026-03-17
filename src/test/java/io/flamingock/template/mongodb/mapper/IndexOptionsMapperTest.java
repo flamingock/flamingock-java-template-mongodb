@@ -272,34 +272,37 @@ class IndexOptionsMapperTest {
     @DisplayName("Unsupported Options Tests")
     class UnsupportedOptionsTests {
 
+        /**
+         * bucketSize, wildcardProjection, and hidden are rejected by CreateIndexParametersValidator
+         * at load time (before the mapper is ever called). These tests verify that the mapper
+         * does NOT throw UnsupportedOperationException — the unsupported check was moved to validation.
+         */
         @Test
-        @DisplayName("WHEN bucketSize is set THEN throws UnsupportedOperationException")
-        void bucketSizeTest() {
+        @DisplayName("WHEN bucketSize is passed to mapper directly THEN mapper ignores it (validation owns rejection)")
+        void bucketSizeIgnoredByMapperTest() {
             Map<String, Object> options = new HashMap<>();
             options.put("bucketSize", 1.0);
 
-            assertThrows(UnsupportedOperationException.class, () ->
-                    IndexOptionsMapper.mapToIndexOptions(options));
+            // Mapper no longer throws for removed keys — CreateIndexParametersValidator rejects them at load time.
+            assertDoesNotThrow(() -> IndexOptionsMapper.mapToIndexOptions(options));
         }
 
         @Test
-        @DisplayName("WHEN wildcardProjection is set THEN throws UnsupportedOperationException")
-        void wildcardProjectionTest() {
+        @DisplayName("WHEN wildcardProjection is passed to mapper directly THEN mapper ignores it")
+        void wildcardProjectionIgnoredByMapperTest() {
             Map<String, Object> options = new HashMap<>();
             options.put("wildcardProjection", new HashMap<>());
 
-            assertThrows(UnsupportedOperationException.class, () ->
-                    IndexOptionsMapper.mapToIndexOptions(options));
+            assertDoesNotThrow(() -> IndexOptionsMapper.mapToIndexOptions(options));
         }
 
         @Test
-        @DisplayName("WHEN hidden is set THEN throws UnsupportedOperationException")
-        void hiddenTest() {
+        @DisplayName("WHEN hidden is passed to mapper directly THEN mapper ignores it")
+        void hiddenIgnoredByMapperTest() {
             Map<String, Object> options = new HashMap<>();
             options.put("hidden", true);
 
-            assertThrows(UnsupportedOperationException.class, () ->
-                    IndexOptionsMapper.mapToIndexOptions(options));
+            assertDoesNotThrow(() -> IndexOptionsMapper.mapToIndexOptions(options));
         }
     }
 

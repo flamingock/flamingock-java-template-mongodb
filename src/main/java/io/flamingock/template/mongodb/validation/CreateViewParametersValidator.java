@@ -83,6 +83,7 @@ public class CreateViewParametersValidator implements OperationValidator {
         } else if (options instanceof Map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> optionsMap = (Map<String, Object>) options;
+            errors.addAll(OperationValidator.checkNullOptionValues(optionsMap, "CreateView"));
             errors.addAll(OperationValidator.checkUnrecognizedOptionKeys(
                     optionsMap, CreateViewOptionsMapper.RECOGNIZED_KEYS, "CreateView"));
         }

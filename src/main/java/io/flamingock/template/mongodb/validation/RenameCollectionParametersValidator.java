@@ -64,6 +64,7 @@ public class RenameCollectionParametersValidator implements OperationValidator {
         } else if (options instanceof Map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> optionsMap = (Map<String, Object>) options;
+            errors.addAll(OperationValidator.checkNullOptionValues(optionsMap, "RenameCollection"));
             errors.addAll(OperationValidator.checkUnrecognizedOptionKeys(
                     optionsMap, RenameCollectionOptionsMapper.RECOGNIZED_KEYS, "RenameCollection"));
         }

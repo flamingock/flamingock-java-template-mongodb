@@ -39,7 +39,9 @@ import io.flamingock.template.mongodb.validation.OperationValidator;
 import io.flamingock.template.mongodb.validation.RenameCollectionParametersValidator;
 import io.flamingock.template.mongodb.validation.UpdateParametersValidator;
 
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 
@@ -57,6 +59,15 @@ public enum MongoOperationType {
     CREATE_VIEW("createView", CreateViewOperator::new, new CreateViewParametersValidator(), false),
     DROP_VIEW("dropView", DropViewOperator::new, new NoParametersValidator("DropView"), false);
 
+    private static final Map<String, MongoOperationType> LOOKUP;
+    static {
+        Map<String, MongoOperationType> map = new HashMap<>();
+        for (MongoOperationType t : values()) {
+            map.put(t.value, t);
+        }
+        LOOKUP = Collections.unmodifiableMap(map);
+    }
+
     private final String value;
     private final BiFunction<MongoDatabase, MongoOperation, MongoOperator> createOperatorFunction;
     private final OperationValidator operationValidator;
@@ -73,16 +84,15 @@ public enum MongoOperationType {
     }
 
     public static MongoOperationType findByTypeOrThrow(String typeValue) {
-        return Arrays.stream(MongoOperationType.values())
-                .filter(type -> type.matches(typeValue))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("MongoOperation not supported: " + typeValue));
+        MongoOperationType found = LOOKUP.get(typeValue);
+        if (found == null) {
+            throw new IllegalArgumentException("MongoOperation not supported: " + typeValue);
+        }
+        return found;
     }
 
     public static Optional<MongoOperationType> findByType(String typeValue) {
-        return Arrays.stream(MongoOperationType.values())
-                .filter(type -> type.matches(typeValue))
-                .findFirst();
+        return Optional.ofNullable(LOOKUP.get(typeValue));
     }
 
     public MongoOperator getOperator(MongoDatabase mongoDatabase, MongoOperation operation) {
@@ -95,9 +105,5 @@ public enum MongoOperationType {
 
     public boolean isTransactional() {
         return transactional;
-    }
-
-    private boolean matches(String operationType) {
-        return this.value.equals(operationType);
     }
 }

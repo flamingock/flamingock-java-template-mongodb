@@ -109,14 +109,17 @@ class RenameCollectionOperatorTest extends AbstractMongoOperatorTest {
     }
 
     @Test
-    @DisplayName("WHEN neither source nor target exists THEN operation throws MongoTemplateExecutionException")
+    @DisplayName("WHEN neither source nor target exists THEN operation is skipped gracefully")
     void renameCollectionNeitherExistsTest() {
         assertFalse(collectionExists(ORIGINAL_NAME), "Source should not exist");
         assertFalse(collectionExists(RENAMED_NAME), "Target should not exist");
 
         MongoOperation operation = buildRenameOperation();
         RenameCollectionOperator operator = new RenameCollectionOperator(mongoDatabase, operation);
-        assertThrows(MongoTemplateExecutionException.class, () -> operator.apply(null));
+        // Should skip silently — both absent means nothing to rename and nothing was renamed
+        assertDoesNotThrow(() -> operator.apply(null));
+        assertFalse(collectionExists(ORIGINAL_NAME), "Source should still not exist");
+        assertFalse(collectionExists(RENAMED_NAME), "Target should still not exist");
     }
 
     private MongoOperation buildRenameOperation() {

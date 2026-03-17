@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 package io.flamingock.template.mongodb.mapper;
-import com.mongodb.client.model.IndexOptions;
 
+import com.mongodb.client.model.IndexOptions;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static io.flamingock.template.mongodb.mapper.MapperUtil.getBoolean;
 import static io.flamingock.template.mongodb.mapper.MapperUtil.getBson;
@@ -31,8 +32,6 @@ import static io.flamingock.template.mongodb.mapper.MapperUtil.getInteger;
 import static io.flamingock.template.mongodb.mapper.MapperUtil.getLong;
 import static io.flamingock.template.mongodb.mapper.MapperUtil.getString;
 
-import java.util.concurrent.TimeUnit;
-
 
 public final class IndexOptionsMapper {
 
@@ -40,8 +39,12 @@ public final class IndexOptionsMapper {
             "background", "unique", "name", "sparse", "expireAfterSeconds",
             "version", "weights", "defaultLanguage", "languageOverride",
             "textVersion", "sphereVersion", "bits", "min", "max",
-            "bucketSize", "storageEngine", "partialFilterExpression",
-            "collation", "wildcardProjection", "hidden"
+            "storageEngine", "partialFilterExpression", "collation"
+    )));
+
+    /** Options removed from the MongoDB Java driver: rejected at validation time with a clear error. */
+    public static final Set<String> UNSUPPORTED_KEYS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "bucketSize", "wildcardProjection", "hidden"
     )));
 
     private IndexOptionsMapper() {}
@@ -91,9 +94,6 @@ public final class IndexOptionsMapper {
         if (options.containsKey("max")) {
             indexOptions.max(getDouble(options, "max"));
         }
-        if (options.containsKey("bucketSize")) {
-            throw new UnsupportedOperationException("bulkSize option is not supported in MongoDB driver versions 4.4.0 and above");
-        }
         if (options.containsKey("storageEngine")) {
             indexOptions.storageEngine(getBson(options, "storageEngine"));
         }
@@ -102,12 +102,6 @@ public final class IndexOptionsMapper {
         }
         if (options.containsKey("collation")) {
             indexOptions.collation(getCollation(options, "collation"));
-        }
-        if (options.containsKey("wildcardProjection")) {
-            throw new UnsupportedOperationException("wildcardProjection option is not supported in MongoDB driver versions 4.1.0 and above");
-        }
-        if (options.containsKey("hidden")) {
-            throw new UnsupportedOperationException("hidden option is not supported in MongoDB driver versions 4.1.0 and above");
         }
 
         return indexOptions;

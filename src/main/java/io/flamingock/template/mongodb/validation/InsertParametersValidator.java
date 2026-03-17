@@ -69,6 +69,7 @@ public class InsertParametersValidator implements OperationValidator {
         } else if (options instanceof Map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> optionsMap = (Map<String, Object>) options;
+            errors.addAll(OperationValidator.checkNullOptionValues(optionsMap, "Insert"));
             errors.addAll(OperationValidator.checkUnrecognizedOptionKeys(
                     optionsMap, InsertOptionsMapper.RECOGNIZED_KEYS, "Insert"));
         }

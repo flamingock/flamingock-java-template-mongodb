@@ -21,14 +21,29 @@ import io.flamingock.template.mongodb.model.MongoOperation;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static java.lang.String.format;
+
 public class CreateIndexParametersValidator implements OperationValidator {
 
     private static final Set<String> RECOGNIZED_KEYS = new HashSet<>(Arrays.asList("keys", "options"));
+
+    /**
+     * Union of RECOGNIZED_KEYS and UNSUPPORTED_KEYS from the mapper. Used by the unrecognized-key
+     * check so that unsupported keys only generate their specific "not supported" error and do not
+     * also trigger the generic "unrecognized option" error.
+     */
+    private static final Set<String> ALL_KNOWN_OPTION_KEYS;
+    static {
+        Set<String> combined = new HashSet<>(IndexOptionsMapper.RECOGNIZED_KEYS);
+        combined.addAll(IndexOptionsMapper.UNSUPPORTED_KEYS);
+        ALL_KNOWN_OPTION_KEYS = Collections.unmodifiableSet(combined);
+    }
 
     @Override
     public List<TemplatePayloadValidationError> validate(MongoOperation operation) {
@@ -66,8 +81,16 @@ public class CreateIndexParametersValidator implements OperationValidator {
         } else if (options instanceof Map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> optionsMap = (Map<String, Object>) options;
+            for (String unsupported : IndexOptionsMapper.UNSUPPORTED_KEYS) {
+                if (optionsMap.containsKey(unsupported)) {
+                    errors.add(new TemplatePayloadValidationError(
+                            "parameters.options." + unsupported,
+                            format("'%s' is not supported — removed from the MongoDB Java driver 4.x+", unsupported)));
+                }
+            }
+            errors.addAll(OperationValidator.checkNullOptionValues(optionsMap, "CreateIndex"));
             errors.addAll(OperationValidator.checkUnrecognizedOptionKeys(
-                    optionsMap, IndexOptionsMapper.RECOGNIZED_KEYS, "CreateIndex"));
+                    optionsMap, ALL_KNOWN_OPTION_KEYS, "CreateIndex"));
         }
 
         errors.addAll(OperationValidator.checkUnrecognizedKeys(params, RECOGNIZED_KEYS, "CreateIndex"));

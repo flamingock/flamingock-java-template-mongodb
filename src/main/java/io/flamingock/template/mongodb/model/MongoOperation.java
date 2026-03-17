@@ -52,23 +52,43 @@ public class MongoOperation implements TemplatePayload {
 
     @SuppressWarnings("unchecked")
     public Document getKeys() {
-        return new Document((Map<String, Object>) parameters.get("keys"));
+        Object value = parameters.get("keys");
+        if (!(value instanceof Map)) {
+            throw new IllegalStateException(
+                    "getKeys() called but 'keys' is not a Map — validate() must run before operator execution");
+        }
+        return new Document((Map<String, Object>) value);
     }
 
     @SuppressWarnings("unchecked")
     public Document getOptions() {
-        return parameters.containsKey("options")
-                ? new Document((Map<String, Object>) parameters.get("options"))
-                : new Document();
+        Object value = parameters.get("options");
+        if (value == null) {
+            return new Document();
+        }
+        if (!(value instanceof Map)) {
+            throw new IllegalStateException(
+                    "getOptions() called but 'options' is not a Map — validate() must run before operator execution");
+        }
+        return new Document((Map<String, Object>) value);
     }
 
     @SuppressWarnings("unchecked")
     public Document getFilter() {
-        return new Document((Map<String, Object>) parameters.get("filter"));
+        Object value = parameters.get("filter");
+        if (!(value instanceof Map)) {
+            throw new IllegalStateException(
+                    "getFilter() called but 'filter' is not a Map — validate() must run before operator execution");
+        }
+        return new Document((Map<String, Object>) value);
     }
 
     public boolean isMulti() {
         Object multi = parameters.get("multi");
+        if (multi != null && !(multi instanceof Boolean)) {
+            throw new IllegalStateException(
+                    "isMulti() called but 'multi' is not a Boolean — validate() must run before operator execution");
+        }
         return multi != null && (Boolean) multi;
     }
 
