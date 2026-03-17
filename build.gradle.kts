@@ -182,6 +182,8 @@ jreleaser {
                     active = org.jreleaser.model.Active.ALWAYS
                     url = "https://central.sonatype.com/api/v1/publisher"
                     stagingRepository("build/staging-deploy")
+                    connectTimeout = 60
+                    readTimeout = 600
                     retryDelay = 20
                     maxRetries = 90
                     applyMavenCentralRules = true
