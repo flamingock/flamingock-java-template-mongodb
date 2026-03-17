@@ -17,9 +17,6 @@ package io.flamingock.template.mongodb.mapper;
 
 import com.mongodb.client.model.IndexOptions;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -37,8 +34,6 @@ import static io.flamingock.template.mongodb.mapper.MapperUtil.getString;
 
 
 public final class IndexOptionsMapper {
-
-    private static final Logger logger = LoggerFactory.getLogger(IndexOptionsMapper.class);
 
     public static final Set<String> RECOGNIZED_KEYS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "background", "unique", "name", "sparse", "expireAfterSeconds",
@@ -58,7 +53,6 @@ public final class IndexOptionsMapper {
         IndexOptions indexOptions = new IndexOptions();
 
         if (options.containsKey("background")) {
-            logger.warn("'background' index option is deprecated since MongoDB 4.2 and has no effect in MongoDB 5.0+");
             indexOptions.background(getBoolean(options, "background"));
         }
         if (options.containsKey("unique")) {

@@ -1793,6 +1793,51 @@ class MongoOperationValidateTest {
             assertEquals("parameters.options.upsert", errors.get(0).getField());
             assertTrue(errors.get(0).getMessage().contains("cannot be null"));
         }
+
+        @Test
+        @DisplayName("WHEN createView option value is null THEN validation fails at load time")
+        void createViewNullOptionValueTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("createView");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("viewOn", "sourceCollection");
+            List<Map<String, Object>> pipeline = new ArrayList<>();
+            Map<String, Object> stage = new HashMap<>();
+            stage.put("$match", new HashMap<>());
+            pipeline.add(stage);
+            params.put("pipeline", pipeline);
+            Map<String, Object> options = new HashMap<>();
+            options.put("collation", null);
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options.collation", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("cannot be null"));
+        }
+
+        @Test
+        @DisplayName("WHEN renameCollection option value is null THEN validation fails at load time")
+        void renameCollectionNullOptionValueTest() {
+            MongoOperation op = new MongoOperation();
+            op.setType("renameCollection");
+            op.setCollection("test");
+            Map<String, Object> params = new HashMap<>();
+            params.put("target", "newName");
+            Map<String, Object> options = new HashMap<>();
+            options.put("dropTarget", null);
+            params.put("options", options);
+            op.setParameters(params);
+
+            List<TemplatePayloadValidationError> errors = op.validate(NON_TRANSACTIONAL_CONTEXT);
+
+            assertEquals(1, errors.size());
+            assertEquals("parameters.options.dropTarget", errors.get(0).getField());
+            assertTrue(errors.get(0).getMessage().contains("cannot be null"));
+        }
     }
 
     @Nested
