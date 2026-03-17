@@ -35,7 +35,10 @@
       "Bash(grep:*)",
       "Bash(ls:*)",
       "Bash(xargs:*)",
-      "Bash(./gradlew tasks:*)"
+      "Bash(./gradlew tasks:*)",
+      "Bash(./gradlew jreleaserConfig 2>&1 | tail -30)",
+      "Bash(find:*)",
+      "Bash(chmod:*)"
     ]
   }
 }
