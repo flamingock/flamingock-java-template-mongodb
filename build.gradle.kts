@@ -7,7 +7,7 @@ plugins {
 
 
 group = "io.flamingock"
-version = "1.0.0-beta.5"
+version = "1.0.0-beta.6"
 
 val flamingockVersion = "1.2.0-beta.1"
 
