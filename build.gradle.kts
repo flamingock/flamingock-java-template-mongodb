@@ -7,9 +7,9 @@ plugins {
 
 
 group = "io.flamingock"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 
-val flamingockVersion = "1.2.0-beta.2"
+val flamingockVersion = "1.2.0-beta.1"
 
 repositories {
     mavenLocal()
