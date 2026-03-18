@@ -7,7 +7,7 @@ plugins {
 
 
 group = "io.flamingock"
-version = "1.0.0-beta.4"
+version = "1.0.0-beta.5"
 
 val flamingockVersion = "1.2.0-beta.1"
 
@@ -179,7 +179,7 @@ jreleaser {
         maven {
             mavenCentral {
                 create("sonatype") {
-                    active = org.jreleaser.model.Active.NEVER
+                    active = org.jreleaser.model.Active.ALWAYS
                     url = "https://central.sonatype.com/api/v1/publisher"
                     stagingRepository("build/staging-deploy")
                     applyMavenCentralRules = true
