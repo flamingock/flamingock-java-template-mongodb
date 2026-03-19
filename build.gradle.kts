@@ -2,11 +2,12 @@ plugins {
     `java-library`
     `maven-publish`
     id("com.diffplug.spotless") version "6.25.0"
+    id("org.jreleaser") version "1.15.0"
 }
 
 
 group = "io.flamingock"
-version = "1.0.0-SNAPSHOT"
+version = "1.0.0-beta.7"
 
 val flamingockVersion = "1.2.0-beta.1"
 
@@ -37,7 +38,8 @@ java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(8))
     }
-
+    withSourcesJar()
+    withJavadocJar()
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -67,19 +69,43 @@ publishing {
                 description.set("MongoDB change templates for document database operations using Flamingock")
                 url.set("https://flamingock.io")
 
+                organization {
+                    name.set("Flamingock")
+                    url.set("https://flamingock.io")
+                }
+
+                issueManagement {
+                    system.set("GitHub")
+                    url.set("https://github.com/flamingock/flamingock-java-template-mongodb/issues")
+                }
+
                 licenses {
                     license {
-                        name.set("Apache License, Version 2.0")
+                        name.set("Apache-2.0")
                         url.set("https://www.apache.org/licenses/LICENSE-2.0")
                     }
                 }
 
                 developers {
                     developer {
-                        id.set("flamingock")
-                        name.set("Flamingock Team")
-                        organization.set("Flamingock")
-                        organizationUrl.set("https://flamingock.io")
+                        id.set("dieppa")
+                        name.set("Antonio Perez Dieppa")
+                        email.set("dieppa@flamingock.io")
+                    }
+                    developer {
+                        id.set("osantana")
+                        name.set("Oscar Santana")
+                        email.set("osantana@flamingock.io")
+                    }
+                    developer {
+                        id.set("bercianor")
+                        name.set("Berciano Ramiro")
+                        email.set("bercianor@flamingock.io")
+                    }
+                    developer {
+                        id.set("dfrigolet")
+                        name.set("Daniel Frigolet")
+                        email.set("dfrigolet@flamingock.io")
                     }
                 }
 
@@ -89,6 +115,11 @@ publishing {
                     url.set("https://github.com/flamingock/flamingock-java-template-mongodb")
                 }
             }
+        }
+    }
+    repositories {
+        maven {
+            url = uri(layout.buildDirectory.dir("staging-deploy"))
         }
     }
 }
@@ -129,4 +160,55 @@ afterEvaluate {
         group = "verification"
         description = "Check license headers (manual task - not part of build)"
     }
+}
+
+jreleaser {
+    project {
+        inceptionYear = "2024"
+        author("dieppa")
+        author("osantana")
+        author("bercianor")
+        author("dfrigolet")
+        description = "MongoDB change templates for document database operations using Flamingock"
+    }
+    signing {
+        active = org.jreleaser.model.Active.ALWAYS
+        armored = true
+    }
+    deploy {
+        maven {
+            mavenCentral {
+                create("sonatype") {
+                    active = org.jreleaser.model.Active.ALWAYS
+                    url = "https://central.sonatype.com/api/v1/publisher"
+                    stagingRepository("build/staging-deploy")
+                    applyMavenCentralRules = true
+                    maxRetries = 90
+                    retryDelay = 20
+                }
+            }
+        }
+    }
+    release {
+        github {
+            overwrite = true
+            changelog {
+                formatted = org.jreleaser.model.Active.ALWAYS
+                preset = "conventional-commits"
+            }
+            prerelease {
+                pattern = ".*(?:beta|alpha|rc|snapshot).*"
+            }
+        }
+    }
+}
+
+tasks.register("createStagingDeployFolder") {
+    doLast {
+        mkdir(layout.buildDirectory.dir("staging-deploy"))
+    }
+}
+
+tasks.matching { it.name == "publish" }.configureEach {
+    finalizedBy("createStagingDeployFolder")
 }
