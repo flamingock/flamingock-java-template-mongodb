@@ -7,7 +7,7 @@ plugins {
 
 
 group = "io.flamingock"
-version = "1.0.0-beta.8"
+version = "1.0.0-beta.9"
 
 val flamingockVersion = "1.2.0-beta.1"
 
@@ -164,40 +164,71 @@ afterEvaluate {
 
 jreleaser {
     project {
-        inceptionYear = "2024"
-        author("dieppa")
-        author("osantana")
-        author("bercianor")
-        author("dfrigolet")
-        description = "MongoDB change templates for document database operations using Flamingock"
+        inceptionYear.set("2024")
+        authors.set(setOf("dieppa", "osantana", "bercianor", "dfrigolet"))
+        description.set("MongoDB change templates for document database operations using Flamingock")
     }
     signing {
-        active = org.jreleaser.model.Active.ALWAYS
+        active.set(org.jreleaser.model.Active.ALWAYS)
         armored = true
+        enabled = true
     }
+    gitRootSearch.set(true)
     deploy {
         maven {
             mavenCentral {
                 create("sonatype") {
-                    active = org.jreleaser.model.Active.ALWAYS
-                    url = "https://central.sonatype.com/api/v1/publisher"
+                    active.set(org.jreleaser.model.Active.ALWAYS)
+                    applyMavenCentralRules.set(true)
+                    url.set("https://central.sonatype.com/api/v1/publisher")
                     stagingRepository("build/staging-deploy")
-                    applyMavenCentralRules = true
-                    maxRetries = 90
-                    retryDelay = 20
+                    maxRetries.set(90)
+                    retryDelay.set(20)
                 }
             }
         }
     }
     release {
         github {
-            overwrite = true
-            changelog {
-                formatted = org.jreleaser.model.Active.ALWAYS
-                preset = "conventional-commits"
+            skipRelease.set(false)
+            skipTag.set(false)
+            update {
+                enabled.set(true)
+                sections.set(setOf(org.jreleaser.model.UpdateSection.TITLE, org.jreleaser.model.UpdateSection.BODY, org.jreleaser.model.UpdateSection.ASSETS))
             }
             prerelease {
-                pattern = ".*(?:beta|alpha|rc|snapshot).*"
+                pattern.set("^(0\\..*|.*-(beta\\.?\\d*|snapshot\\.?\\d*|alpha\\.?\\d*|rc\\.?\\d*|RC\\.?\\d*)\$)")
+            }
+            changelog {
+                enabled.set(true)
+                formatted.set(org.jreleaser.model.Active.ALWAYS)
+                sort.set(org.jreleaser.model.Changelog.Sort.DESC)
+                links.set(true)
+                preset.set("conventional-commits")
+                releaseName.set("Release {{tagName}}")
+                content.set("""
+                    ## Changelog
+                    {{changelogChanges}}
+                    {{changelogContributors}}
+                """.trimIndent())
+                categoryTitleFormat.set("### {{categoryTitle}}")
+                format.set(
+                    """|- {{commitShortHash}}
+                       | {{#commitIsConventional}}
+                       |{{#conventionalCommitIsBreakingChange}}:rotating_light: {{/conventionalCommitIsBreakingChange}}
+                       |{{#conventionalCommitScope}}**{{conventionalCommitScope}}**: {{/conventionalCommitScope}}
+                       |{{conventionalCommitDescription}}
+                       |{{#conventionalCommitBreakingChangeContent}} - *{{conventionalCommitBreakingChangeContent}}*{{/conventionalCommitBreakingChangeContent}}
+                       |{{/commitIsConventional}}
+                       |{{^commitIsConventional}}{{commitTitle}}{{/commitIsConventional}}
+                       |{{#commitHasIssues}}, closes{{#commitIssues}} {{issue}}{{/commitIssues}}{{/commitHasIssues}}
+                       |{{#contributorName}} ({{contributorName}}){{/contributorName}}
+                    |""".trimMargin().replace("\n", "").replace("\r", "")
+                )
+                contributors {
+                    enabled.set(true)
+                    format.set("- {{contributorName}} ({{contributorUsernameAsLink}})")
+                }
             }
         }
     }

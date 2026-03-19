@@ -1,0 +1,79 @@
+name: Module release(graalVM)
+
+on:
+  workflow_call:
+    inputs:
+      module:
+        description: "The module to be released (empty for mono-project)"
+        required: false
+        default: ""
+        type: string
+
+    secrets:
+      FLAMINGOCK_JRELEASER_GITHUB_TOKEN:
+        required: true
+      FLAMINGOCK_JRELEASER_MAVENCENTRAL_USERNAME:
+        required: true
+      FLAMINGOCK_JRELEASER_MAVENCENTRAL_PASSWORD:
+        required: true
+      FLAMINGOCK_JRELEASER_GPG_PUBLIC_KEY:
+        required: true
+      FLAMINGOCK_JRELEASER_GPG_SECRET_KEY:
+        required: true
+      FLAMINGOCK_JRELEASER_GPG_PASSPHRASE:
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.gradle/build-cache
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Set up Java
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '17'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.FLAMINGOCK_JRELEASER_GITHUB_TOKEN }}
+
+      - name: Set up GPG
+        run: |
+          echo "$GPG_SECRET_KEY" > private.asc
+          gpg --import --batch private.asc
+        env:
+          GPG_SECRET_KEY: ${{ secrets.FLAMINGOCK_JRELEASER_GPG_SECRET_KEY }}
+
+      - name: Prepare maven publish
+        run: |
+          if [ -n "${{ inputs.module }}" ]; then
+            ./gradlew publish -Pmodule=${{ inputs.module }}
+          else
+            ./gradlew publish
+          fi
+        env:
+          JRELEASER_MAVENCENTRAL_USERNAME: ${{ secrets.FLAMINGOCK_JRELEASER_MAVENCENTRAL_USERNAME }}
+          JRELEASER_MAVENCENTRAL_PASSWORD: ${{ secrets.FLAMINGOCK_JRELEASER_MAVENCENTRAL_PASSWORD }}
+
+      - name: Release to Maven Central portal
+        run: ./infra/module-release-with-retry.sh ${{ inputs.module }} 5 20
+        env:
+          JRELEASER_GITHUB_TOKEN: ${{ secrets.FLAMINGOCK_JRELEASER_GITHUB_TOKEN }}
+          JRELEASER_MAVENCENTRAL_USERNAME: ${{ secrets.FLAMINGOCK_JRELEASER_MAVENCENTRAL_USERNAME }}
+          JRELEASER_MAVENCENTRAL_PASSWORD: ${{ secrets.FLAMINGOCK_JRELEASER_MAVENCENTRAL_PASSWORD }}
+          JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.FLAMINGOCK_JRELEASER_GPG_PUBLIC_KEY }}
+          JRELEASER_GPG_SECRET_KEY: ${{ secrets.FLAMINGOCK_JRELEASER_GPG_SECRET_KEY }}
+          JRELEASER_GPG_PASSPHRASE: ${{ secrets.FLAMINGOCK_JRELEASER_GPG_PASSPHRASE }}
