@@ -7,7 +7,7 @@ plugins {
 
 
 group = "io.flamingock"
-version = "1.0.0-beta.9"
+version = "1.0.0-beta.10"
 
 val flamingockVersion = "1.2.0-beta.1"
 
@@ -162,36 +162,16 @@ afterEvaluate {
     }
 }
 
+// Part 1: Release management config — always present (used by jreleaserRelease)
 jreleaser {
     project {
         inceptionYear.set("2024")
         authors.set(setOf("dieppa", "osantana", "bercianor", "dfrigolet"))
         description.set("MongoDB change templates for document database operations using Flamingock")
     }
-    signing {
-        active.set(org.jreleaser.model.Active.ALWAYS)
-        armored = true
-        enabled = true
-    }
     gitRootSearch.set(true)
-    deploy {
-        maven {
-            mavenCentral {
-                create("sonatype") {
-                    active.set(org.jreleaser.model.Active.ALWAYS)
-                    applyMavenCentralRules.set(true)
-                    url.set("https://central.sonatype.com/api/v1/publisher")
-                    stagingRepository("build/staging-deploy")
-                    maxRetries.set(90)
-                    retryDelay.set(20)
-                }
-            }
-        }
-    }
     release {
         github {
-            skipRelease.set(false)
-            skipTag.set(false)
             update {
                 enabled.set(true)
                 sections.set(setOf(org.jreleaser.model.UpdateSection.TITLE, org.jreleaser.model.UpdateSection.BODY, org.jreleaser.model.UpdateSection.ASSETS))
@@ -228,6 +208,41 @@ jreleaser {
                 contributors {
                     enabled.set(true)
                     format.set("- {{contributorName}} ({{contributorUsernameAsLink}})")
+                }
+            }
+        }
+    }
+}
+
+// Part 2: Deploy config — only when deploying to Maven Central (not needed for jreleaserRelease)
+val isReleasing = gradle.startParameter.taskNames.any {
+    it in listOf("jreleaserFullRelease", "jreleaserDeploy", "publish")
+}
+
+if (isReleasing) {
+    jreleaser {
+        signing {
+            active.set(org.jreleaser.model.Active.ALWAYS)
+            armored = true
+            enabled = true
+        }
+        release {
+            github {
+                skipRelease.set(true)
+                skipTag.set(true)
+            }
+        }
+        deploy {
+            maven {
+                mavenCentral {
+                    create("sonatype") {
+                        active.set(org.jreleaser.model.Active.ALWAYS)
+                        applyMavenCentralRules.set(true)
+                        url.set("https://central.sonatype.com/api/v1/publisher")
+                        stagingRepository("build/staging-deploy")
+                        maxRetries.set(90)
+                        retryDelay.set(20)
+                    }
                 }
             }
         }
