@@ -9,8 +9,8 @@ plugins {
 group = "io.flamingock"
 version = "1.0.0-beta.10"
 
-val flamingockVersion = "1.2.0-beta.2"
-val templateApiVersion = "1.3.0"
+val flamingockVersion = "1.2.0-beta.2"//only for test
+val templateApiVersion = "1.3.1"
 val coreApiVersion = "1.3.0"
 
 repositories {
@@ -19,7 +19,7 @@ repositories {
 }
 
 dependencies {
-    implementation("io.flamingock:flamingock-core-api:${coreApiVersion}") //we need nullable
+    implementation("io.flamingock:flamingock-core-api:${coreApiVersion}") //we need nullable, NonLockGuarded, etc.
     implementation("io.flamingock:flamingock-template-api:$templateApiVersion")
     implementation("org.slf4j:slf4j-api:1.7.36")
     compileOnly("org.mongodb:mongodb-driver-sync:4.0.0")
