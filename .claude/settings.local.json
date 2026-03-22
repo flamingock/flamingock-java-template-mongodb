@@ -39,7 +39,9 @@
       "Bash(./gradlew jreleaserConfig 2>&1 | tail -30)",
       "Bash(find:*)",
       "Bash(chmod:*)",
-      "Bash(gh release:*)"
+      "Bash(gh release:*)",
+      "Bash(./gradlew -q help -t)",
+      "Bash(./gradlew --dry-run publish)"
     ]
   }
 }

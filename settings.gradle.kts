@@ -1,1 +1,1 @@
-rootProject.name = "flamingock-java-template-mongodb"
+rootProject.name = "flamingock-template-mongodb"
