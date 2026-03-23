@@ -1,6 +1,6 @@
 # Flamingock MongoDB Template — Comprehensive Module Analysis
 
-**Module:** `flamingock-template-mongodb` v1.2.0-SNAPSHOT
+**Module:** `flamingock-mongodb-sync-template` v1.2.0-SNAPSHOT
 **Flamingock Core:** v1.2.0-beta.1
 **Java Target:** 8
 **MongoDB Driver:** 4.0.0 (compileOnly)
@@ -10,7 +10,7 @@
 
 ## 1. Architecture Overview
 
-**Module coordinates:** `io.flamingock:flamingock-java-template-mongodb:1.2.0-SNAPSHOT`
+**Module coordinates:** `io.flamingock:flamingock-mongodb-sync-template:1.2.0-SNAPSHOT`
 
 **Execution flow:**
 ```
