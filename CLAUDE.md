@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**flamingock-template-mongodb** is a Flamingock template library that provides declarative, YAML-based MongoDB operations. It enables "no-code" system evolution by allowing developers to define MongoDB changes in YAML files instead of writing Java classes.
+**flamingock-mongodb-sync-template** is a Flamingock template library that provides declarative, YAML-based MongoDB operations. It enables "no-code" system evolution by allowing developers to define MongoDB changes in YAML files instead of writing Java classes.
 
 This is a **standalone repository** — it is not a module of `flamingock-java`. It depends on Flamingock core artifacts published to Maven Local or Maven Central.
 
