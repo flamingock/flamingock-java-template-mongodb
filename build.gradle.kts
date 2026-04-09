@@ -7,7 +7,7 @@ plugins {
 
 
 group = "io.flamingock"
-version = "1.2.0-beta.4"
+version = "1.2.0"
 
 val flamingockVersion = "1.2.0-beta.2"//only for test
 val templateApiVersion = "1.3.1"
