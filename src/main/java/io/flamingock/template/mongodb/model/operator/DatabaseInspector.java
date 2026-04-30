@@ -30,12 +30,6 @@ final class DatabaseInspector {
     private DatabaseInspector() {
     }
 
-    static boolean collectionExists(MongoDatabase database, String collectionName) {
-        return database.listCollectionNames()
-                .into(new ArrayList<>())
-                .contains(collectionName);
-    }
-
     static boolean indexExistsByName(MongoDatabase database, String collection, String indexName) {
         List<Document> indexes = database.getCollection(collection)
                 .listIndexes()

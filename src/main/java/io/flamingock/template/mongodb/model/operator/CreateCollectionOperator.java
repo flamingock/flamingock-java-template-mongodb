@@ -15,6 +15,7 @@
  */
 package io.flamingock.template.mongodb.model.operator;
 
+import com.mongodb.MongoCommandException;
 import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoDatabase;
 import io.flamingock.template.mongodb.model.MongoOperation;
@@ -27,11 +28,15 @@ public class CreateCollectionOperator extends MongoOperator {
 
     @Override
     public void applyInternal(ClientSession clientSession) {
-        if (DatabaseInspector.collectionExists(mongoDatabase, op.getCollection())) {
-            logger.info("Collection '{}' already exists, skipping createCollection", op.getCollection());
-            return;
+        try {
+            mongoDatabase.createCollection(op.getCollection());
+        } catch (MongoCommandException e) {
+            if (e.getErrorCode() == 48) { // NamespaceExists
+                logger.info("Collection '{}' already exists, skipping createCollection", op.getCollection());
+                return;
+            }
+            throw e;
         }
-        mongoDatabase.createCollection(op.getCollection());
     }
 
 }

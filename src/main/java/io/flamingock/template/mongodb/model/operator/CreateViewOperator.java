@@ -15,6 +15,7 @@
  */
 package io.flamingock.template.mongodb.model.operator;
 
+import com.mongodb.MongoCommandException;
 import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.CreateViewOptions;
@@ -34,12 +35,16 @@ public class CreateViewOperator extends MongoOperator {
 
     @Override
     protected void applyInternal(ClientSession clientSession) {
-        if (DatabaseInspector.collectionExists(mongoDatabase, op.getCollection())) {
-            logger.info("View '{}' already exists, skipping createView", op.getCollection());
-            return;
+        try {
+            CreateViewOptions options = CreateViewOptionsMapper.map(op.getOptions());
+            mongoDatabase.createView(op.getCollection(), getViewOn(), getPipeline(), options);
+        } catch (MongoCommandException e) {
+            if (e.getErrorCode() == 48) { // NamespaceExists
+                logger.info("View '{}' already exists, skipping createView", op.getCollection());
+                return;
+            }
+            throw e;
         }
-        CreateViewOptions options = CreateViewOptionsMapper.map(op.getOptions());
-        mongoDatabase.createView(op.getCollection(), getViewOn(), getPipeline(), options);
     }
 
     private String getViewOn() {

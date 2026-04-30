@@ -15,6 +15,7 @@
  */
 package io.flamingock.template.mongodb.operations;
 
+import io.flamingock.template.mongodb.MongoTemplateExecutionException;
 import io.flamingock.template.mongodb.model.MongoOperation;
 import io.flamingock.template.mongodb.model.operator.RenameCollectionOperator;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,9 +27,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import io.flamingock.template.mongodb.MongoTemplateExecutionException;
-
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,12 +48,7 @@ class RenameCollectionOperatorTest extends AbstractMongoOperatorTest {
         mongoDatabase.createCollection(ORIGINAL_NAME);
         assertTrue(collectionExists(ORIGINAL_NAME), "Original collection should exist before rename");
 
-        MongoOperation operation = new MongoOperation();
-        operation.setType("renameCollection");
-        operation.setCollection(ORIGINAL_NAME);
-        Map<String, Object> params = new HashMap<>();
-        params.put("target", RENAMED_NAME);
-        operation.setParameters(params);
+        MongoOperation operation = buildRenameOperation();
 
         RenameCollectionOperator operator = new RenameCollectionOperator(mongoDatabase, operation);
         operator.apply(null);
@@ -65,8 +58,8 @@ class RenameCollectionOperatorTest extends AbstractMongoOperatorTest {
     }
 
     @Test
-    @DisplayName("WHEN renameCollection operator is applied twice THEN second call succeeds silently")
-    void renameCollectionIdempotentTest() {
+    @DisplayName("WHEN renameCollection is applied twice THEN second call fails because source no longer exists")
+    void renameCollectionFailsOnSecondAttemptTest() {
         mongoDatabase.createCollection(ORIGINAL_NAME);
         assertTrue(collectionExists(ORIGINAL_NAME), "Original collection should exist before rename");
 
@@ -77,27 +70,28 @@ class RenameCollectionOperatorTest extends AbstractMongoOperatorTest {
         assertFalse(collectionExists(ORIGINAL_NAME), "Original should not exist after rename");
         assertTrue(collectionExists(RENAMED_NAME), "Renamed should exist after rename");
 
-        // Second apply should not throw (source gone, target exists → already renamed)
-        assertDoesNotThrow(() -> operator.apply(null));
-        assertTrue(collectionExists(RENAMED_NAME), "Renamed should still exist after second apply");
+        // Second apply MUST fail: source is gone. Rename is a transformation, not an end-state —
+        // re-running it is not a safe no-op.
+        assertThrows(MongoTemplateExecutionException.class, () -> operator.apply(null));
+        assertTrue(collectionExists(RENAMED_NAME), "Renamed should still exist after failed second apply");
     }
 
     @Test
-    @DisplayName("WHEN source is gone and target exists THEN operation is skipped as already renamed")
-    void renameCollectionAlreadyRenamedTest() {
+    @DisplayName("WHEN source is gone and target exists THEN operation fails (cannot assume it was this rename)")
+    void renameCollectionFailsWhenSourceMissingButTargetExistsTest() {
         mongoDatabase.createCollection(RENAMED_NAME);
         assertFalse(collectionExists(ORIGINAL_NAME), "Original should not exist");
         assertTrue(collectionExists(RENAMED_NAME), "Target should already exist");
 
         MongoOperation operation = buildRenameOperation();
         RenameCollectionOperator operator = new RenameCollectionOperator(mongoDatabase, operation);
-        assertDoesNotThrow(() -> operator.apply(null));
-        assertTrue(collectionExists(RENAMED_NAME), "Target should still exist after skipped rename");
+        assertThrows(MongoTemplateExecutionException.class, () -> operator.apply(null));
+        assertTrue(collectionExists(RENAMED_NAME), "Target should still exist after failed rename");
     }
 
     @Test
-    @DisplayName("WHEN both source and target exist THEN operation throws MongoTemplateExecutionException")
-    void renameCollectionBothExistTest() {
+    @DisplayName("WHEN both source and target exist THEN operation fails with MongoTemplateExecutionException")
+    void renameCollectionFailsWhenBothExistTest() {
         mongoDatabase.createCollection(ORIGINAL_NAME);
         mongoDatabase.createCollection(RENAMED_NAME);
         assertTrue(collectionExists(ORIGINAL_NAME), "Source should exist");
@@ -109,15 +103,14 @@ class RenameCollectionOperatorTest extends AbstractMongoOperatorTest {
     }
 
     @Test
-    @DisplayName("WHEN neither source nor target exists THEN operation is skipped gracefully")
-    void renameCollectionNeitherExistsTest() {
+    @DisplayName("WHEN neither source nor target exists THEN operation fails because source is missing")
+    void renameCollectionFailsWhenNeitherExistsTest() {
         assertFalse(collectionExists(ORIGINAL_NAME), "Source should not exist");
         assertFalse(collectionExists(RENAMED_NAME), "Target should not exist");
 
         MongoOperation operation = buildRenameOperation();
         RenameCollectionOperator operator = new RenameCollectionOperator(mongoDatabase, operation);
-        // Should skip silently — both absent means nothing to rename and nothing was renamed
-        assertDoesNotThrow(() -> operator.apply(null));
+        assertThrows(MongoTemplateExecutionException.class, () -> operator.apply(null));
         assertFalse(collectionExists(ORIGINAL_NAME), "Source should still not exist");
         assertFalse(collectionExists(RENAMED_NAME), "Target should still not exist");
     }
