@@ -9,7 +9,7 @@ plugins {
 group = "io.flamingock"
 version = "1.3.0-SNAPSHOT"
 
-val flamingockVersion = "1.2.0-beta.2"//only for test
+val flamingockVersion = "1.2.1"//only for test
 val templateApiVersion = "1.3.3"
 val coreApiVersion = "1.3.2"
 
@@ -25,8 +25,8 @@ dependencies {
     compileOnly("org.mongodb:mongodb-driver-sync:4.0.0")
 
     testAnnotationProcessor("io.flamingock:flamingock-processor:$flamingockVersion")
-    testImplementation("io.flamingock:flamingock-auditstore-mongodb-sync:$flamingockVersion")
-    testImplementation("io.flamingock:mongodb-sync-target-system:$flamingockVersion")
+    testImplementation("io.flamingock:flamingock-mongodb-sync-auditstore:$flamingockVersion")
+    testImplementation("io.flamingock:flamingock-mongodb-sync-targetsystem:$flamingockVersion")
     testImplementation("io.flamingock:test-util:$flamingockVersion")
     testImplementation("io.flamingock:mongodb-util:$flamingockVersion")
     testImplementation("org.testcontainers:testcontainers-mongodb:2.0.2")

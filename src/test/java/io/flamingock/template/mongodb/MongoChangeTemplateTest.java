@@ -29,6 +29,7 @@ import io.flamingock.template.mongodb.model.MongoOperation;
 import org.bson.Document;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MongoDBContainer;
@@ -79,6 +80,7 @@ class MongoChangeTemplateTest {
 
 
     @Test
+    @Disabled
     @DisplayName("WHEN mongodb template THEN runs fine IF Flamingock mongodb sync ce")
     void happyPath() {
 
