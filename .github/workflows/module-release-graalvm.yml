@@ -60,16 +60,16 @@ jobs:
       - name: Prepare maven publish
         run: |
           if [ -n "${{ inputs.module }}" ]; then
-            ./gradlew publish -Pmodule=${{ inputs.module }}
+            ./gradlew publish -Prelease -Pmodule=${{ inputs.module }}
           else
-            ./gradlew publish
+            ./gradlew publish -Prelease
           fi
         env:
           JRELEASER_MAVENCENTRAL_USERNAME: ${{ secrets.FLAMINGOCK_JRELEASER_MAVENCENTRAL_USERNAME }}
           JRELEASER_MAVENCENTRAL_PASSWORD: ${{ secrets.FLAMINGOCK_JRELEASER_MAVENCENTRAL_PASSWORD }}
 
       - name: Release to Maven Central portal
-        run: ./infra/module-release-with-retry.sh ${{ inputs.module }} 5 20
+        run: ./infra/module-release-with-retry.sh "${{ inputs.module }}" 5 20 -Prelease
         env:
           JRELEASER_GITHUB_TOKEN: ${{ secrets.FLAMINGOCK_JRELEASER_GITHUB_TOKEN }}
           JRELEASER_MAVENCENTRAL_USERNAME: ${{ secrets.FLAMINGOCK_JRELEASER_MAVENCENTRAL_USERNAME }}
