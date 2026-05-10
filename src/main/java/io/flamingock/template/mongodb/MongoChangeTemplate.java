@@ -74,14 +74,11 @@ import org.slf4j.LoggerFactory;
  *
  * @see MongoOperation
  */
-@ChangeTemplate( name = "mongodb-sync-template", multiStep = true)
+@ChangeTemplate( name = "mongodb-sync-template", multiStep = true, reflectiveClasses = {MongoOperation.class})
 public class MongoChangeTemplate extends AbstractChangeTemplate<TemplateVoid, MongoOperation, MongoOperation> {
 
     private static final Logger log = LoggerFactory.getLogger(MongoChangeTemplate.class);
 
-    public MongoChangeTemplate() {
-        super(MongoOperation.class);
-    }
 
     /**
      * Executes the apply operation for the current step.
