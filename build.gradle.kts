@@ -7,11 +7,11 @@ plugins {
 
 
 group = "io.flamingock"
-version = "1.3.1"
+version = "1.3.2-SNAPSHOT"
 
 val flamingockVersion = "1.2.1"//only for test
-val templateApiVersion = "1.3.3"
-val coreApiVersion = "1.3.2"
+val templateApiVersion = "1.3.4"
+val coreApiVersion = "1.3.3"
 
 repositories {
     mavenLocal()
