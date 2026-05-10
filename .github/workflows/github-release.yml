@@ -44,7 +44,7 @@ jobs:
           distribution: 'graalvm-community'
 
       - name: Publish Release to Github
-        run: ./gradlew jreleaserRelease --stacktrace --no-daemon
+        run: ./gradlew jreleaserRelease -Prelease --stacktrace --no-daemon
         env:
           JRELEASER_GITHUB_TOKEN: ${{ secrets.FLAMINGOCK_JRELEASER_GITHUB_TOKEN }}
           JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.FLAMINGOCK_JRELEASER_GPG_PUBLIC_KEY }}
